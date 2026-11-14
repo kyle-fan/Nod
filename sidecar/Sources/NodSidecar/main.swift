@@ -53,6 +53,35 @@ let voice = try await Voice(model: ttsModel, speaker: ttsSpeaker, instruction: v
 await voice.warmUp()
 log(String(format: "TTS ready in %.1fs", Date().timeIntervalSince(loadStart)))
 
+// MARK: Ears (mic -> WhisperKit -> hub /heard)
+
+let hubURL = URL(string: env["NOD_HUB_URL"] ?? "http://127.0.0.1:8000/heard")!
+let whisperModel = env["NOD_WHISPER_MODEL"] ?? "large-v3-v20240930_626MB"
+var ears: Ears?
+if env["NOD_EARS"] != "0" {
+    log("loading Whisper \(whisperModel)")
+    let t0 = Date()
+    let whisper = try await Ears.loadWhisper(model: whisperModel)
+    // Small model for live captions; set NOD_WHISPER_FAST="" to use one model for everything.
+    let fastModel = env["NOD_WHISPER_FAST"] ?? "small.en"
+    let fast = fastModel.isEmpty || fastModel == whisperModel ? nil : try await Ears.loadWhisper(model: fastModel)
+    let e = Ears(whisper: whisper, fast: fast, hubURL: hubURL, env: env)
+    await e.warmUp()
+    ears = e
+    if let file = env["NOD_AUDIO_FILE"] {
+        log("TEST MODE: feeding \(file) instead of the microphone")
+        Task { try? await e.simulate(file: file) }
+    } else {
+        // Don't block startup on the macOS microphone prompt.
+        Task {
+            do { try await e.startMic(); log("microphone on") }
+            catch { log("MIC ERROR: \(error.localizedDescription)") }
+        }
+    }
+    Task { await e.run() }
+    log(String(format: "ears ready in %.1fs, posting to %@", Date().timeIntervalSince(t0), hubURL.absoluteString))
+}
+
 // MARK: Routes
 
 let server = HTTPServer(address: try .inet(ip4: "127.0.0.1", port: port))
