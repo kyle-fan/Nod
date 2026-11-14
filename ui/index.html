@@ -72,13 +72,16 @@
   .s-speaking .talk { animation:talk .28s steps(1) infinite; }
   #star.pop svg { animation:pop .32s ease-out; }
 
-  #tiles { display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; }
+  #tiles { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:16px; }
   #tiles:empty { display:none; }
   .tile { min-height:128px; padding:20px 18px; font-size:25px; line-height:1.25; display:flex; align-items:center;
           justify-content:center; text-align:center; border-radius:22px; border-width:2px;
           transition:transform .18s cubic-bezier(.2,.9,.3,1.2), border-color .18s, background .18s, box-shadow .18s; }
   .tile.on { border-color:var(--star); background:rgba(255,216,74,.14); transform:translateY(-8px) scale(1.04);
              box-shadow:inset 0 1px 0 rgba(255,255,255,.25), 0 0 0 4px rgba(255,216,74,.18), 0 18px 44px rgba(255,216,74,.22); }
+  .tile { flex-direction:column; gap:6px; }
+  .tile .cap { font-family:var(--mono); font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--star); opacity:.9; }
+  .tile.yes { border-color:rgba(255,216,74,.45); }
   .tile.meta { color:var(--dim); font-size:20px; border-style:dashed; }
   .tile.meta.on { color:var(--text); }
   .tile.skel { animation:shimmer 1.1s ease-in-out infinite; }
@@ -99,8 +102,12 @@
   .overlay body { grid-template-rows:1fr auto; padding:0 28px 22px; }
   .overlay header, .overlay #convo, .overlay footer, .overlay .hint { display:none; }
   .overlay #dock { grid-row:2; }
-  .overlay .glass { background:rgba(14,17,24,.72); border-color:rgba(255,255,255,.2); }
-  .overlay .tile.on { background:rgba(74,58,6,.9); border-color:var(--star); border-width:3px; }
+  /* a page can't blur other apps' windows behind it, so overlay glass is a tinted sheen instead */
+  .overlay .glass { background:linear-gradient(160deg, rgba(52,58,74,.86), rgba(15,18,26,.9) 55%);
+                    border-color:rgba(255,255,255,.26);
+                    box-shadow:inset 0 1px 0 rgba(255,255,255,.3), inset 0 -1px 0 rgba(0,0,0,.4), 0 14px 36px rgba(0,0,0,.45); }
+  .overlay .tile.on { background:linear-gradient(160deg, rgba(120,96,18,.95), rgba(58,45,6,.95) 60%);
+                      border-color:var(--star); border-width:3px; }
   .overlay .tile.meta { color:#c3cad6; }
   .overlay #star { filter:drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1.5px #000) drop-shadow(0 0 12px rgba(255,216,74,.5)); }
 
@@ -167,7 +174,7 @@ const STAR = [
 
 let ws, lastTiles = "", lastConvo = "", lastGestureN = null;
 const GESTURE_LABEL = {nod: "nod", left: "← tilt", right: "tilt →", select: "smile ✓", cancel: "back"};
-const SUB = {listen: "Nod when it's your turn", thinking: "", speaking: ""};
+const SUB = {listen: "Nod when it's your turn", computer: "Pick the next step"};
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
@@ -177,7 +184,8 @@ function connect() {
 
 function render(s) {
   $("dock").className = "s-" + s.mode;
-  const sub = s.mode in SUB ? SUB[s.mode] : "";
+  const confirming = s.tiles.some(t => t.kind === "confirm");
+  const sub = confirming ? "Tilt to Yes and smile to confirm" : s.mode in SUB ? SUB[s.mode] : "";
   $("bubble").innerHTML = esc(s.status) + (sub ? `<small>${sub}</small>` : "");
   $("lat").textContent = s.stats.latency_ms != null ? `${(s.stats.latency_ms / 1000).toFixed(1)} s / reply` : "-- s";
   $("model").textContent = s.stats.bonsai_ok ? s.stats.model : "Bonsai offline (fallback)";
@@ -201,7 +209,13 @@ function render(s) {
       ? '<div class="tile glass skel"></div>'.repeat(4)
       : s.tiles.map(t => {
           const meta = ["more", "else", "done", "home", "kind"].includes(t.kind) ? " meta" : "";
-          return `<div class="tile glass${meta}">${esc(t.label)}</div>`;
+          const yes = t.kind === "confirm" && t.value ? " yes" : "";
+          // computer steps say exactly what will happen: press this, type that, open that
+          const a = t.kind === "action" ? t.value : null;
+          const cap = a ? `<span class="cap">${{press: "press", type: "type", open_app: "open"}[a.type] || ""}</span>` : "";
+          const text = a && a.type === "type" ? `“${esc(a.text)}”` : a && a.type === "open_app" ? esc(a.name) : esc(t.label);
+          const then = t.then === "computer" ? '<span class="cap">then does it on the mac</span>' : "";
+          return `<div class="tile glass${meta}${yes}">${cap}<span>${text}</span>${then}</div>`;
         }).join("");
   }
   if (s.mode !== "thinking")

@@ -1,0 +1,24 @@
+Classify the last thing a friend said to {name}. {name} can send texts and use apps on his Mac.
+
+- none: the friend is just talking: a question to {name}, an invitation, news, a feeling, small talk. This is most lines.
+- message: the friend told {name} to tell, text, or ask a person who is not in the room.
+- computer: the friend told {name} to put something on, open something, or look something up.
+
+Examples:
+"want to get food later" -> none
+"how was class" -> none
+"did Jake text you back" -> none
+"are you coming to the thing friday" -> none
+"Jake said he's almost here" -> none
+"I'm so tired" -> none
+"can you tell Jake dinner's ready" -> message
+"text your sister happy birthday" -> message
+"ask Jake if he's still coming" -> message
+"put on some music" -> computer
+"look up the score" -> computer
+
+Conversation (most recent last):
+{history}
+
+Classify the friend's last line.
+Return JSON: {{"task": "none"}} or {{"task": "message"}} or {{"task": "computer"}}

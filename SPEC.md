@@ -50,23 +50,29 @@ context  ->  Bonsai predicts options  ->  tiles on screen  ->  head gesture pick
 - Returns the actionable elements of the frontmost app, from the macOS accessibility tree (AXUIElement).
 ```json
 {
-  "app": "Discord",
+  "app": "Messages",
   "elements": [
-    { "id": 1, "role": "button", "label": "Andrew" },
-    { "id": 2, "role": "textfield", "label": "Message @Andrew" },
+    { "id": 1, "role": "button", "label": "Back to conversations" },
+    { "id": 2, "role": "textfield", "label": "Message Andrew", "value": "" },
     { "id": 3, "role": "button", "label": "Send" }
   ]
 }
 ```
 - Keep it short: at most ~40 elements, only things you can press or type into, with a non-empty label. IDs only need to be valid until the next `/screen` call.
+- `role`: use `textfield` for anything you can type into (the hub also accepts `textarea`, `searchfield`, `combobox`). Every other role (`button`, `link`, `row`, ...) is treated as pressable.
+- `value` (typeable elements only): the text currently in the field, `""` if empty. The hub uses it to know a message has been typed (so the next step is Send) and to say what is about to be sent in the confirmation.
+- Labels are what the user reads on the tile and what Bonsai reasons from, so make them plain: `"Andrew"`, `"Message Andrew"`, `"Send"`. A send control must have "send" (or "post"/"submit") in its label: that is how the hub knows to ask for confirmation.
+- `app` is the app's plain name (`"Messages"`, `"Safari"`), matching the names in `hub/profile.json` `apps`.
 
 `POST /act`
 ```json
 { "type": "press", "id": 3 }
-{ "type": "type", "id": 2, "text": "Game's starting, come back!" }
-{ "type": "open_app", "name": "Discord" }
+{ "type": "type", "id": 2, "text": "game's starting, come back" }
+{ "type": "open_app", "name": "Messages" }
 ```
-- `press` = AXPress. `type` = focus the field, set its value (or type keystrokes), do NOT press Enter. Return `{"ok": true}` or `{"ok": false, "error": "..."}`.
+- `press` = AXPress (fall back to a click at the element's center if AXPress isn't supported). `type` = focus the field and set its value (or type keystrokes), replacing what was there. Do NOT press Enter. Return `{"ok": true}` or `{"ok": false, "error": "..."}`.
+- `open_app` names come from `hub/profile.json` `apps` (currently Messages and Safari). Bring the app to the front; `/screen` should describe it on the next call.
+- The hub calls `/screen` again about 0.4 s after every successful `/act`, so the app should have updated by then.
 
 ## Overlay window (page built; native window proposed, sidecar side)
 
@@ -100,13 +106,26 @@ CHOOSE "More..." --> NARROW: Bonsai asks a short question + 3 options that fit t
                      ("More..." again narrows deeper; "Something else" = 3 new options)
 NARROW after 3 rounds --> safe tiles ("Hold on, let me think." | "Can you ask me as a yes or no?" | "Never mind." | Start over)
 NARROW if Bonsai fails --> fixed KIND tiles (Yes | No | Ask a question | Something else)
-COMPUTER: /screen -> Bonsai picks 3 next steps + "Done" -> select -> confirm if it sends -> /act -> repeat
+COMPUTER: /screen -> Bonsai picks 3 next steps + "Done" -> select -> /act -> /screen -> repeat
+          a step that sends/posts/deletes -> Yes/No first ("No" is highlighted) -> /act -> LISTEN
+          /act fails -> "That didn't work. Try another?" + new steps
 ```
+
+Two ways into computer mode:
+- **Say, then do.** When the friend asks for something doable on the Mac ("tell Andrew to come back", "put the game on"), the first reply tile agrees ("yeah one sec") and is marked "then does it on the mac". Picking it speaks the reply, then goes straight to COMPUTER. Bonsai decides this per friend line (`prompts/task.txt`).
+- **Home menu.** Open mouth from LISTEN, pick "Use computer".
+
+How a computer step is chosen (`prompts/actions.txt`, `prompts/message.txt`):
+- Bonsai first states the goal and which app it needs, from the conversation. If that app isn't in front, "Open <app>" is the first tile.
+- Bonsai can only output steps that exist: press ids of pressable elements, type into ids of text fields, open an app from the profile.
+- When the best step is typing a message, the 3 tiles are 3 wordings of that message.
+- "Send" is not offered while every text field is empty.
+- Tile text comes from the real element ("press · Andrew", "type · “come back”"), so a tile says exactly what will happen.
 
 ## Rules
 
 - Tiles: 3 suggestions + 1 escape tile ("More..." in talk mode, "Done" in computer mode).
 - Replies under 12 words, in the character's voice, never invent facts about them.
-- Anything that sends, posts, or deletes gets a spoken confirmation first ("Send this to Andrew?"), answered with Yes / No tiles.
+- Anything that sends, posts, or deletes gets a spoken confirmation first that includes the text (`Send "come back"?`), answered with Yes / No tiles. "No" starts highlighted, so one stray smile can never send something.
 - The hub pre-generates replies when the friend pauses (0.8 s after a final transcript) so the nod feels instant.
 - No network calls except localhost. Demo runs with Wi-Fi off.

@@ -58,7 +58,8 @@ class State:
         self.in_computer = False
         self.screen: dict = {}
         self.pending: dict | None = None   # action waiting for confirmation
-        self.pregen: tuple | None = None   # (history_len, replies)
+        self.done: list[str] = []          # computer steps taken this session
+        self.pregen: tuple | None = None   # (history_len, replies, offer_computer)
         self.pregen_task: asyncio.Task | None = None
         self.narrow = new_narrow()   # "More..." narrowing for the current turn
 
@@ -103,14 +104,17 @@ async def show_replies(kind=None, path=None):
         await broadcast()
         await asyncio.wait([task])   # doesn't raise if the task was cancelled
     if fresh and S.pregen and S.pregen[0] == len(S.history):
-        replies, ms, ok = S.pregen[1], 0, True   # pre-generated during the pause
+        replies, ms, ok, offer = S.pregen[1], 0, True, S.pregen[2]   # pre-generated during the pause
     else:
         S.mode, S.status, S.tiles = "thinking", "Thinking...", []
         await broadcast()
+        offer = fresh and await brain.computer_task(S.history)
         replies, ms, ok = await brain.suggest_replies(
-            S.history, kind=kind, path=path, avoid=None if fresh else S.narrow["rejected"])
+            S.history, kind=kind, path=path, avoid=None if fresh else S.narrow["rejected"], offer=offer)
     S.stats.update(latency_ms=ms or S.stats["latency_ms"], bonsai_ok=ok)
     tiles = [{"label": r, "kind": "say", "value": r} for r in replies]
+    if offer:   # the friend asked for something doable on the Mac: say it, then go do it
+        tiles[0]["then"] = "computer"
     tiles.append({"label": "More...", "kind": "more"})
     set_tiles(tiles, status="Pick a reply")
 
@@ -136,52 +140,87 @@ async def show_intents():
     set_tiles(tiles, status=question or "What do you want to say?")
 
 
-async def say(text):
-    S.mode, S.status, S.tiles = "speaking", f"Speaking", []
+async def say(text, then=None):
+    S.mode, S.status, S.tiles = "speaking", "Speaking", []
     S.history.append({"who": "me", "text": text})
     S.last_said = text
     await broadcast()
     await sidecar.speak(text)
-    go_listen()
+    if then == "computer":   # he just agreed to do something on the Mac: start doing it
+        S.done = []
+        await show_actions()
+    else:
+        go_listen()
 
 
 async def pregenerate(n_turns):
     await asyncio.sleep(config.PREGEN_PAUSE_S)
     if len(S.history) != n_turns or S.mode != "listen":
         return
-    replies, ms, ok = await brain.suggest_replies(S.history)
+    offer = await brain.computer_task(S.history)
+    replies, ms, ok = await brain.suggest_replies(S.history, offer=offer)
     if len(S.history) == n_turns:
-        S.pregen = (n_turns, replies)
+        S.pregen = (n_turns, replies, offer)
         S.stats.update(latency_ms=ms, bonsai_ok=ok)
 
 
 # ---------- computer mode ----------
 
-async def show_actions():
+async def show_actions(note=""):
     S.in_computer = True
     S.mode, S.status, S.tiles = "thinking", "Reading the screen...", []
     await broadcast()
     S.screen = await sidecar.screen()
-    acts, ms, ok = await brain.suggest_actions(S.history, S.screen)
+    acts, ms, ok = await brain.suggest_actions(S.history, S.screen, S.done)
     S.stats.update(latency_ms=ms, bonsai_ok=ok)
     tiles = [{"label": a["label"], "kind": "action", "value": a} for a in acts]
     tiles.append({"label": "Done", "kind": "done"})
-    set_tiles(tiles, mode="computer", status=f"Computer · {S.screen.get('app', '')}")
+    set_tiles(tiles, mode="computer", status=note or f"Computer · {S.screen.get('app', '')}")
+
+
+def element(action):
+    return next((e for e in S.screen.get("elements", []) if e["id"] == action.get("id")), {})
 
 
 def is_risky(action):
-    if action.get("type") != "press":
-        return False
-    label = next((e["label"] for e in S.screen.get("elements", []) if e["id"] == action.get("id")), "")
-    return any(w in (label + " " + action.get("label", "")).lower() for w in RISKY_WORDS)
+    return action.get("type") == "press" and any(w in action["label"].lower() for w in RISKY_WORDS)
 
 
-async def run_action(action):
-    S.status = "Doing it..."
+def confirm_question(action):
+    """Say what is about to go out, not just the button name."""
+    draft = next((e["value"] for e in S.screen.get("elements", [])
+                  if e["role"] in sidecar.TYPEABLE and e.get("value")), "")
+    if draft and "send" in action["label"].lower():
+        return f'Send "{draft}"?'
+    return f'{action["label"]}?'
+
+
+def describe(action):
+    """One line for the "already done" list Bonsai sees on the next step."""
+    if action["type"] == "type":
+        return f'Typed "{action["text"]}" into "{element(action).get("label", "the text field")}"'
+    if action["type"] == "open_app":
+        return f'Opened {action["name"]}'
+    return f'Pressed "{action["label"]}"'
+
+
+async def run_action(action, finish=False):
+    """finish=True: this was a confirmed send/post/delete, so the task is over."""
+    S.mode, S.status, S.tiles = "thinking", "Doing it...", []
     await broadcast()
-    res = await sidecar.act({k: v for k, v in action.items() if k != "label"})
+    try:
+        res = await sidecar.act({k: v for k, v in action.items() if k != "label"})
+    except Exception as e:   # sidecar down or crashed: stay usable
+        res = {"ok": False, "error": str(e)}
     if not res.get("ok"):
         print(f"[act] failed: {res}")
+        await asyncio.sleep(0.4)
+        await show_actions(note="That didn't work. Try another?")
+        return
+    S.done.append(describe(action))
+    if finish:
+        go_listen(status="Done")
+        return
     await asyncio.sleep(0.4)   # let the app update before reading it again
     await show_actions()
 
@@ -216,7 +255,7 @@ async def handle(gesture):
 async def pick(tile):
     k = tile["kind"]
     if k == "say":
-        await say(tile["value"])
+        await say(tile["value"], then=tile.get("then"))
     elif k == "more":
         S.narrow["rejected"] += [t["label"] for t in S.tiles if t.get("kind") == "say"]
         await show_intents()
@@ -232,6 +271,7 @@ async def pick(tile):
         if v == "talk":
             await show_replies()
         elif v == "computer":
+            S.done = []
             await show_actions()
         elif v == "repeat" and S.last_said:
             await sidecar.speak(S.last_said)
@@ -244,15 +284,16 @@ async def pick(tile):
             S.pending = action
             set_tiles([{"label": "Yes, do it", "kind": "confirm", "value": True},
                        {"label": "No", "kind": "confirm", "value": False}],
-                      mode="computer", status=f"Confirm: {action['label']}?")
+                      mode="computer", status=confirm_question(action))
+            S.index = 1   # highlight "No": a stray smile must never send something
             await broadcast()
-            await sidecar.speak(f"{action['label']}?")
+            await sidecar.speak(S.status)
         else:
             await run_action(action)
     elif k == "confirm":
         action, S.pending = S.pending, None
         if tile["value"] and action:
-            await run_action(action)
+            await run_action(action, finish=True)
         else:
             await show_actions()
     elif k == "done":
@@ -316,6 +357,7 @@ async def ws_endpoint(ws: WebSocket):
                 await recalibrate()
             elif msg.get("type") == "reset":
                 S.history.clear()
+                sidecar.FAKE.reset()
                 go_listen()
                 await broadcast()
     except WebSocketDisconnect:

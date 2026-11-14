@@ -1,6 +1,6 @@
 # Handoff to the Mac side (sidecar owner and their coding agent)
 
-Written 2026-11-14 by Kyle's side. Read SPEC.md and CLAUDE.md first; this file says what changed, what's left for the Mac, and one new idea that needs sidecar work. Demo is tomorrow.
+Written 2026-11-14 by Kyle's side, updated the same evening after computer mode and the UI were built. Read SPEC.md and CLAUDE.md first; this file says what changed, what's left for the Mac, and one new idea that needs sidecar work. Demo is tomorrow.
 
 ## State of the repo
 
@@ -11,7 +11,7 @@ What changed that affects you:
 - **Select gesture is now a smile**, not eyebrows (SPEC.md, Gestures). Eyebrows don't read behind glasses. This is hub-side only; the sidecar isn't involved in gestures.
 - **The character is Theo** (`hub/profile.json`): a CS junior with cerebral palsy, chill and low-key. If the sidecar picks a TTSKit voice, the `voice` field there describes it: warm, slightly raspy young male voice, calm pace.
 - **"More..." is now driven by Bonsai** (SPEC.md, Hub states). Hub-side only.
-- **No sidecar endpoint or JSON shape changed.** `/heard`, `/speak`, `/screen`, `/act` are exactly as the spec had them.
+- **Speech endpoints are unchanged** (`/heard`, `/speak`). `/screen` and `/act` gained a few details for computer mode: see "Computer mode" below and SPEC.md.
 
 ## What the Mac side needs to do
 
@@ -66,10 +66,72 @@ Gestures don't need window focus (the hub reads the camera directly), so a click
 
 If the overlay turns out to be more than an hour or two, skip it: demo in a browser window docked to the bottom of the screen, and still do item 2.
 
+Note on the glass look: a web page cannot blur other apps' windows behind it, so in overlay mode the tiles are a dark tinted glass with a sheen, not a live blur. If you want real blur, an `NSVisualEffectView` behind the web view would do it, but it's optional polish.
+
+## Computer mode: what the hub does now, and what it needs from you
+
+The hub side is built and rehearsed against a fake Mac (`hub/sidecar.py`, `FakeMac`). With `MOCK_SIDECAR=1` you can run the whole thing with no Swift at all, which is the fastest way to see what the hub expects from the real sidecar:
+
+```bash
+USE_CAMERA=0 MOCK_SIDECAR=1 uvicorn hub.main:app --port 8000
+# in the browser dev box: the game's about to start, can you tell Andrew to come back
+# N, then Space on each first tile, and → then Space to confirm the send
+```
+
+The exact contract is in SPEC.md ("Hub -> Sidecar" and "Hub states"). What changed there since the scaffold:
+
+- `/screen` elements that can be typed into carry a `"value"` (current text, `""` if empty).
+- Use role `textfield` for anything typeable; everything else is treated as pressable.
+- A send control needs "send" in its label, so the hub asks for confirmation.
+- `open_app` names come from `hub/profile.json` `apps` (Messages, Safari).
+- `/act` returning `{"ok": false, "error": "..."}` is handled: the hub says it didn't work and offers new steps.
+
+### The two demo chains (rehearsed, first tile is correct at each step)
+
+Measured on Kyle's laptop against the fake Mac: texting 5 of 5 full runs, game 3 of 3, about 17 s each including speech.
+
+**A. Text Andrew.** Friend says "the game's about to start, can you tell Andrew to come back".
+
+| Gesture | Tile picked | Hub calls |
+|---|---|---|
+| nod, smile | "yeah one sec" (marked "then does it on the mac") | `/speak`, then `/screen` |
+| smile | press · Andrew | `/act {"type":"press","id":…}`, `/screen` |
+| smile | type · "come back" | `/act {"type":"type","id":…,"text":"come back"}`, `/screen` |
+| smile | press · Send | (no call yet: hub asks `Send "come back"?`, speaks it via `/speak`) |
+| tilt, smile | Yes, do it | `/act {"type":"press","id":…}` then back to listening |
+
+If Messages is not in front, the first step is "Open Messages" (`/act {"type":"open_app","name":"Messages"}`).
+
+**B. Put the game on.** Friend says "can you put the yankees game on". Steps: "yeah one sec", Open Safari (if not in front), press the link whose label mentions the Yankees game, press Play, then Done.
+
+For these to work on the real Mac, `/screen` has to return elements shaped like the fake ones. For Messages, the conversation list should yield one pressable element per person labeled with just their name (`"Andrew"`), and an open chat should yield a `textfield` labeled `"Message Andrew"` with its `value`, plus a `"Send"` button. Run the fake and look at `FakeMac.screen()` for the exact shapes that are known to work.
+
+### Things about real macOS apps that will need handling (please verify, these are from memory)
+
+- **Messages may have no Send button.** On macOS you normally send with Return. If the accessibility tree has no send control, have the sidecar add a synthetic element `{"role":"button","label":"Send"}` to `/screen` whenever the message field is non-empty or present, and implement pressing it as posting a Return key to the field. The hub only presses it after the user confirms.
+- **Conversation rows are probably not buttons.** They're likely rows/cells with static text inside. Report each as one pressable element labeled with the contact name, and implement press as AXPress, or selecting the row, or a click at its center, whichever works.
+- **Setting a field's value by accessibility may not register** in some apps (the Send control stays disabled, or the text vanishes). If so, focus the field and type the text as keystrokes instead.
+- **Prefer Apple's apps for the demo** (Messages, Safari). Electron apps like Discord often expose little to accessibility.
+- **Accessibility permission**: the sidecar binary (or Terminal/Xcode while developing) needs it in System Settings, Privacy & Security, Accessibility. Without it every AX call fails silently.
+- **Keep `/screen` small and plain.** At most about 40 elements, deduplicated, skipping toolbar noise. Bonsai 2 9B gets worse with long or cryptic lists. Fewer, well-labeled elements beat completeness.
+- **Frontmost app**: with the non-activating overlay, `NSWorkspace.shared.frontmostApplication` stays the real app. If the UI is in a browser tab instead, you need to track the last non-browser frontmost app and target that.
+- For the Safari chain, links on a real page will be many. Consider returning only links plus the address field, capped, or pre-opening a simple page for the demo.
+
+### Steering the demo without code changes
+
+Everything Bonsai knows about Theo is in `hub/profile.json`, re-read on every call, no restart needed:
+
+- `apps`: the apps "Open …" can offer.
+- `computer`: his habits ("Texts his friends in the Messages app"). This is what makes Bonsai choose the right app.
+- `texts`: example messages he's sent before. These steer the wording of drafted messages strongly. To make a specific demo line come out a specific way, add an example close to it here. That is prompt tuning: Bonsai still writes every tile.
+- `examples` and `style`: his talking voice.
+
+Prompts are in `prompts/`: `task.txt` (is this a request to do something), `actions.txt` (next step), `message.txt` (message wording), `reply.txt`, `intent.txt`. The hub prints `[brain] goal: … app: …` for every computer step, which is the first thing to look at when a tile is wrong.
+
 ## Order of work
 
 1. Sidecar speech in and out, talk mode working on the Mac with Wi-Fi off. The demo depends on this.
-2. `/screen` and `/act` ignoring Blink's window, then try computer mode (hub side is scaffolded, untested against a real screen).
+2. `/screen` and `/act` for Messages (chain A), ignoring Blink's window. Rehearse chain A until it's boring. Then Safari (chain B) if time allows.
 3. Overlay window.
 
 ## If something on the hub side looks wrong

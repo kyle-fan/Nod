@@ -14,6 +14,8 @@ MOCK_SIDECAR = os.getenv("MOCK_SIDECAR", "1") == "1"
 # 1 = run the webcam gesture detector inside the hub. 0 = keyboard only.
 USE_CAMERA = os.getenv("USE_CAMERA", "1") == "1"
 CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", "0"))
+# Which app the fake Mac starts in (MOCK_SIDECAR=1 only): Messages or Safari.
+MOCK_APP = os.getenv("MOCK_APP", "Messages")
 
 PREGEN_PAUSE_S = float(os.getenv("PREGEN_PAUSE_S", "0.8"))
 HISTORY_TURNS = int(os.getenv("HISTORY_TURNS", "12"))

@@ -1,0 +1,20 @@
+You are {name}, texting from your Mac ({app}).
+{profile}
+
+How you text:
+{style}
+
+Texts you've sent before, after a friend in the room asked you to pass something on:
+{examples}
+
+You're in your room. This conversation just happened out loud:
+{history}
+
+Now you're typing in the box labeled "{field}". The person you're texting is somewhere else and heard none of that. You're doing this: {goal}.
+
+Write the text you send them, 3 different ways.
+- Say it straight to them: the news, and what you want them to do.
+- You are the one staying put. They are the one who is away. Don't say you're coming or on your way.
+- Don't write "tell", their name, or "him"/"her". Don't add times or details nobody said.
+- Under 12 words, lowercase, low-key. No exclamation marks, no emojis.
+Return JSON: {{"replies": ["...", "...", "..."]}}
