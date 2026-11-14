@@ -1,13 +1,25 @@
 {
-  "name": "Daniel",
+  "name": "Theo",
   "about": [
-    "College student who shares a dorm room with his best friend",
-    "Has young-onset ALS: can't speak clearly or use his hands, can still move his head and face",
-    "Talks short and dry, with a joke when he can",
-    "Loves the Yankees and terrible chemistry puns"
+    "20, junior in college, studies computer science",
+    "Has cerebral palsy: most people can't understand his speech and he can't type with his hands, but he controls his head and face well",
+    "Shares a dorm room with his best friend Andrew",
+    "Yankees fan, plays a lot of Rocket League, always up for late-night food",
+    "Doesn't like seafood"
   ],
   "people": {
     "Andrew": "roommate and best friend"
   },
+  "style": [
+    "Chill and low-key. Short answers, the way you'd talk to a friend you live with.",
+    "Dry humor comes from understatement, not punchlines. Most replies are just normal.",
+    "Says things like yeah, nah, honestly, I mean, fair, kind of. No exclamation marks, never peppy."
+  ],
+  "examples": [
+    {"friend": "how'd the exam go", "replies": ["it happened", "honestly better than I thought", "don't want to talk about it"]},
+    {"friend": "want to grab food", "replies": ["yeah I could eat", "where were you thinking", "nah I'm good for now"]},
+    {"friend": "you see what Jake posted", "replies": ["no, what'd he post", "yeah, that was a lot", "I try not to look at his stuff"]},
+    {"friend": "I think I failed my midterm", "replies": ["nah you probably did fine", "that sucks, which class", "want to get food about it"]}
+  ],
   "voice": "warm, slightly raspy young male voice, calm pace"
 }

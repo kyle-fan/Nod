@@ -79,7 +79,7 @@ function render(s) {
   c.scrollTop = c.scrollHeight;
 
   $("tiles").innerHTML = s.tiles.map((t, i) => {
-    const meta = ["more", "done", "home", "kind"].includes(t.kind) ? " meta" : "";
+    const meta = ["more", "else", "done", "home", "kind"].includes(t.kind) ? " meta" : "";
     return `<div class="tile${meta}${i === s.index ? " on" : ""}">${esc(t.label)}</div>`;
   }).join("");
 }

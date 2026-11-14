@@ -27,7 +27,20 @@ KIND_TILES = [
     {"label": "Ask a question", "kind": "kind", "value": "question"},
     {"label": "Something else", "kind": "kind", "value": "else"},
 ]
+# After this many narrowing rounds, stop guessing and offer replies that always work.
+MAX_NARROW_ROUNDS = 3
+STUCK_TILES = [
+    {"label": "Hold on, let me think.", "kind": "say", "value": "Hold on, let me think."},
+    {"label": "Can you ask me as a yes or no?", "kind": "say", "value": "Can you ask me as a yes or no?"},
+    {"label": "Never mind.", "kind": "say", "value": "Never mind."},
+    {"label": "Start over", "kind": "home", "value": "back"},
+]
 RISKY_WORDS = ("send", "post", "delete", "remove", "submit")
+
+
+def new_narrow():
+    # path: options picked (most specific last); rejected: replies passed on; seen: options shown
+    return {"path": [], "rejected": [], "seen": [], "rounds": 0}
 
 
 class State:
@@ -46,6 +59,7 @@ class State:
         self.pending: dict | None = None   # action waiting for confirmation
         self.pregen: tuple | None = None   # (history_len, replies)
         self.pregen_task: asyncio.Task | None = None
+        self.narrow = new_narrow()   # "More..." narrowing for the current turn
 
     def view(self):
         return {k: getattr(self, k) for k in
@@ -77,24 +91,48 @@ def go_listen(status="Listening"):
 
 # ---------- talk mode ----------
 
-async def show_replies(kind=None):
-    prev = [t["label"] for t in S.tiles if t.get("kind") == "say"]
+async def show_replies(kind=None, path=None):
+    fresh = kind is None and not path
+    if fresh:
+        S.narrow = new_narrow()
     task = S.pregen_task
-    if kind is None and not S.pregen and task and not task.done():
+    if fresh and not S.pregen and task and not task.done():
         # Nodded while pre-generation is mid-flight: wait for it, don't start a duplicate call.
         S.mode, S.status, S.tiles = "thinking", "Thinking...", []
         await broadcast()
         await asyncio.wait([task])   # doesn't raise if the task was cancelled
-    if kind is None and S.pregen and S.pregen[0] == len(S.history):
+    if fresh and S.pregen and S.pregen[0] == len(S.history):
         replies, ms, ok = S.pregen[1], 0, True   # pre-generated during the pause
     else:
         S.mode, S.status, S.tiles = "thinking", "Thinking...", []
         await broadcast()
-        replies, ms, ok = await brain.suggest_replies(S.history, kind=kind, prev=prev)
+        replies, ms, ok = await brain.suggest_replies(
+            S.history, kind=kind, path=path, avoid=None if fresh else S.narrow["rejected"])
     S.stats.update(latency_ms=ms or S.stats["latency_ms"], bonsai_ok=ok)
     tiles = [{"label": r, "kind": "say", "value": r} for r in replies]
     tiles.append({"label": "More...", "kind": "more"})
     set_tiles(tiles, status="Pick a reply")
+
+
+async def show_intents():
+    """Bonsai asks a clarifying question with 3 directions; each pick narrows further."""
+    N = S.narrow
+    N["rounds"] += 1
+    if N["rounds"] > MAX_NARROW_ROUNDS:
+        set_tiles(STUCK_TILES, status="Not getting it. Say one of these?")
+        return
+    S.mode, S.status, S.tiles = "thinking", "Narrowing it down...", []
+    await broadcast()
+    question, options, ms, ok = await brain.suggest_intents(
+        S.history, N["path"], N["rejected"], N["seen"])
+    S.stats.update(latency_ms=ms, bonsai_ok=ok)
+    if not options:   # Bonsai failed: fixed categories still work
+        set_tiles(KIND_TILES, status="What kind of reply?")
+        return
+    N["seen"] += options
+    tiles = [{"label": o, "kind": "intent", "value": o} for o in options]
+    tiles.append({"label": "Something else", "kind": "else"})
+    set_tiles(tiles, status=question or "What do you want to say?")
 
 
 async def say(text):
@@ -178,7 +216,13 @@ async def pick(tile):
     if k == "say":
         await say(tile["value"])
     elif k == "more":
-        set_tiles(KIND_TILES, status="What kind of reply?")
+        S.narrow["rejected"] += [t["label"] for t in S.tiles if t.get("kind") == "say"]
+        await show_intents()
+    elif k == "intent":
+        S.narrow["path"].append(tile["value"])
+        await show_replies(path=list(S.narrow["path"]))
+    elif k == "else":
+        await show_intents()
     elif k == "kind":
         await show_replies(kind=tile["value"])
     elif k == "home":

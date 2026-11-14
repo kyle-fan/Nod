@@ -84,7 +84,11 @@ Keyboard fallback in the UI (for dev and as a demo safety net): `N` nod, `←` `
 ```
 LISTEN --nod--> THINKING --> CHOOSE --select reply--> SPEAKING --> LISTEN
 LISTEN --cancel--> HOME (Talk | Use computer | Repeat last)
-CHOOSE "More..." --> KIND (Yes | No | Ask a question | Something else) --> new replies
+CHOOSE "More..." --> NARROW: Bonsai asks a short question + 3 options that fit the
+                     conversation + "Something else" --> pick one --> 3 replies that do that
+                     ("More..." again narrows deeper; "Something else" = 3 new options)
+NARROW after 3 rounds --> safe tiles ("Hold on, let me think." | "Can you ask me as a yes or no?" | "Never mind." | Start over)
+NARROW if Bonsai fails --> fixed KIND tiles (Yes | No | Ask a question | Something else)
 COMPUTER: /screen -> Bonsai picks 3 next steps + "Done" -> select -> confirm if it sends -> /act -> repeat
 ```
 

@@ -1,0 +1,19 @@
+{name} can't speak or type. He picks replies with head gestures, and the suggested replies didn't fit what he wants to say. Help him narrow it down.
+
+About {name}:
+{profile}
+
+Conversation so far (most recent last):
+{history}
+
+{path}Replies he already passed on:
+{rejected}
+
+Ask {name} one short question about what he wants to say back to the friend, and give 3 answers he can pick.
+- The question is under 8 words, written to {name} about his reply (for example "Are you in or out?" or "What's the holdup?"). Don't ask about details only the friend would know.
+- Each option is 2 to 4 words and describes what he'd say, not the exact words (for example "Yes, but later", "Ask who's going", "Say I'm busy").
+- The 3 options must be clearly different intentions, and different from the replies he passed on.
+- If he already picked a direction, the options are more specific versions of it (for example "Say yes" could become "Yes, after class", "Yes, if there's food", "Yes, but not too late").
+- The friend is right there talking to him. Don't suggest checking with other people.
+- Don't repeat these options, he's seen them: {seen}
+Return JSON: {{"question": "...", "options": ["...", "...", "..."]}}
