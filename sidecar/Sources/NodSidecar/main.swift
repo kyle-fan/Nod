@@ -104,5 +104,23 @@ await server.appendRoute("POST /speak") { request in
     }
 }
 
+// MARK: Hands (Accessibility API)
+
+let hands = Hands()
+if !Hands.trusted { log("WARNING: " + Hands.permissionError) }
+
+await server.appendRoute("GET /screen") { request in
+    // Optional ?app=Name reads a specific running app instead of the frontmost one.
+    let app = request.query.first(where: { $0.name == "app" })?.value
+    return json(hands.screen(appName: app))
+}
+
+await server.appendRoute("POST /act") { request in
+    let action = await body(request)
+    let result = await hands.act(action)
+    log("act \(action) -> \(result)")
+    return json(result)
+}
+
 log("listening on http://127.0.0.1:\(port)")
 try await server.run()

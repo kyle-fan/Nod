@@ -58,6 +58,7 @@ context  ->  Bonsai predicts options  ->  tiles on screen  ->  head gesture pick
   ]
 }
 ```
+- Optional: `GET /screen?app=Messages` reads that running app instead of the frontmost one (useful when the tile browser is in front).
 - Keep it short: at most ~40 elements, only things you can press or type into, with a non-empty label. IDs only need to be valid until the next `/screen` call.
 - `role`: use `textfield` for anything you can type into (the hub also accepts `textarea`, `searchfield`, `combobox`). Every other role (`button`, `link`, `row`, ...) is treated as pressable.
 - `value` (typeable elements only): the text currently in the field, `""` if empty. The hub uses it to know a message has been typed (so the next step is Send) and to say what is about to be sent in the confirmation.
