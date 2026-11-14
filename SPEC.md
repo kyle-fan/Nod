@@ -68,6 +68,15 @@ context  ->  Bonsai predicts options  ->  tiles on screen  ->  head gesture pick
 ```
 - `press` = AXPress. `type` = focus the field, set its value (or type keystrokes), do NOT press Enter. Return `{"ok": true}` or `{"ok": false, "error": "..."}`.
 
+## Overlay window (proposed, sidecar side)
+
+Blink should float over whatever app is in use instead of living in a browser tab.
+
+- The sidecar opens a transparent, always-on-top, non-activating, click-through window (borderless `NSPanel` + WKWebView) that loads `http://127.0.0.1:8000/?overlay=1`. Full width, anchored to the bottom, about the bottom third of the screen.
+- With `?overlay=1` the page has a transparent background and shows only the character, status line, and tiles (no dev bar, no conversation panel). Without it, the page is the normal full tab.
+- `/screen` and `/act` always target the frontmost app that is not Blink (not the overlay, and not a browser tab showing the hub UI).
+- Fallback if the overlay isn't built: a browser window docked at the bottom of the screen.
+
 ## Gestures
 
 | Gesture | Event | Meaning |
