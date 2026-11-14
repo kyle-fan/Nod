@@ -1,6 +1,6 @@
 # Blink
 
-Talk and use your computer with a nod, a head tilt, and your eyebrows. Fully on-device, works with Wi-Fi off.
+Talk and use your computer with a nod, a head tilt, and a smile. Fully on-device, works with Wi-Fi off.
 
 Built for the Local AI Hackathon (Recreate theme). Uses Bonsai 2 for prediction and Argmax (WhisperKit + TTSKit) for speech.
 
@@ -32,9 +32,10 @@ If Bonsai isn't running, the hub still works with fallback replies and shows "Bo
 ## Turn on the camera
 
 ```bash
-python -m hub.face --debug      # sit still 2 s, then try each gesture and watch the numbers
+python -m hub.face --measure    # 70 s guided: do each gesture, get suggested thresholds for your face and camera
+python -m hub.face --debug      # sit still 2 s, then try each gesture and watch which events fire
 ```
-Tune the thresholds at the top of `hub/face.py`. If tilting right says "left," set `FLIP_ROLL = True` (same idea for nods with `FLIP_PITCH`). Then run the hub with `USE_CAMERA=1`.
+Put the suggested values at the top of `hub/face.py` (thresholds differ per person and per camera, so redo this on the demo Mac). Select is a smile; eyebrows don't read behind glasses, but `SELECT_SIGNAL = "brow"` switches back. Then run the hub with `USE_CAMERA=1`.
 
 ## Demo setup (Mac)
 

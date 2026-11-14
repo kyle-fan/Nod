@@ -74,7 +74,7 @@ context  ->  Bonsai predicts options  ->  tiles on screen  ->  head gesture pick
 |---|---|---|
 | Nod (down then up) | `nod` | "My turn": show reply tiles |
 | Tilt head left / right | `left` / `right` | Move highlight |
-| Raise eyebrows | `select` | Pick highlighted tile |
+| Smile (hold 0.25 s) | `select` | Pick highlighted tile. Was eyebrows: they don't read behind glasses. Switch back with `SELECT_SIGNAL` in `hub/face.py` |
 | Open mouth (hold) | `cancel` | Back. From listening: open home menu |
 
 Keyboard fallback in the UI (for dev and as a demo safety net): `N` nod, `←` `→` move, `Space` select, `Esc` cancel.
