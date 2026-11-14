@@ -44,6 +44,8 @@ Put the suggested values at the top of `hub/face.py` (thresholds differ per pers
 3. Hub: `USE_CAMERA=1 MOCK_SIDECAR=0 uvicorn hub.main:app --port 8000`
 4. Browser full screen at http://127.0.0.1:8000. Turn Wi-Fi off.
 
+Or run steps 1 to 3 in one go with `./start.sh` (and `./stop.sh` to shut down). Logs go to `/tmp/nod/`.
+
 ## Workflow
 
 - `SPEC.md` is the source of truth for every interface. Change it first, then the code.

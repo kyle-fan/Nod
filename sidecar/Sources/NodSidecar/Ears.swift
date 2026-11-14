@@ -26,9 +26,20 @@ final class Ears: @unchecked Sendable {
     private let gateDB: Float             // dB above the noise floor that counts as speech
     private let absMinDB: Float = -55
     private let partialGap = 0.25         // => at most ~4 partials per second
+    private let frameSize = 480           // 30 ms analysis frames
+    private let floorWindow = 167         // frames kept for the noise floor (~5 s)
+    private let stableEnd = 1.5           // caption unchanged this long => the sentence is over
+    private let emptyDrop = 2.0           // no words after this long => it was noise, not speech
 
     // Loop state
+    private var frameRemainder: [Float] = []
+    private var recentDB: [Float] = []        // last ~5 s of frame levels, for the noise floor
+    private var recentIndex = 0
     private var noiseDB: Float = -60
+    private var framesSinceFloor = 0
+    private var fastPasses = 0                // fast-model passes on the current utterance
+    private var stableSince = Date()          // when the partial text last changed
+    private var clearCaptionAfterMute = false
     private var preRollBuf: [Float] = []
     private var utterance: [Float] = []
     private var inUtterance = false
@@ -52,7 +63,7 @@ final class Ears: @unchecked Sendable {
         self.fast = fast ?? whisper
         self.hubURL = hubURL
         self.endSilence = Double(env["NOD_END_SILENCE"] ?? "") ?? 0.7
-        self.gateDB = Float(env["NOD_VAD_DB"] ?? "") ?? 10
+        self.gateDB = Float(env["NOD_VAD_DB"] ?? "") ?? 9
         self.debug = env["NOD_DEBUG"] == "1"
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest = 2
@@ -121,9 +132,16 @@ final class Ears: @unchecked Sendable {
 
             if MuteGate.shared.isMuted {
                 // We are speaking (or just finished): throw away everything we heard.
-                if !wasMuted { reset(); wasMuted = true }
+                if !wasMuted {
+                    clearCaptionAfterMute = !lastPartialText.isEmpty
+                    reset(); frameRemainder.removeAll(); wasMuted = true
+                }
             } else {
-                if wasMuted { reset(); wasMuted = false }
+                if wasMuted {
+                    reset(); frameRemainder.removeAll(); wasMuted = false
+                    // A half-heard sentence was on screen when we started talking: clear it.
+                    if clearCaptionAfterMute { clearCaptionAfterMute = false; await post("", final: false) }
+                }
                 for b in buffers { consume(b) }
                 await step()
             }
@@ -147,6 +165,8 @@ final class Ears: @unchecked Sendable {
         lastPartialSamples = 0
         lastPartialText = ""
         candidateText = nil
+        fastPasses = 0
+        stableSince = Date()
     }
 
     /// Run both models once so the first real sentence is not slow.
@@ -157,33 +177,58 @@ final class Ears: @unchecked Sendable {
         _ = await transcribe(noise, using: whisper)
     }
 
+    /// Split incoming audio into fixed 30 ms frames so the gate behaves the same
+    /// whatever buffer size the microphone delivers.
     private func consume(_ buffer: [Float]) {
         guard !buffer.isEmpty else { return }
-        let seconds = Double(buffer.count) / Ears.sampleRate
-        var sum: Float = 0
-        for s in buffer { sum += s * s }
-        let db = 10 * log10(max(sum / Float(buffer.count), 1e-10))
-        let isSpeech = db > max(absMinDB, noiseDB + gateDB)
-
-        if !isSpeech {
-            // Track the room's noise floor: fall quickly, rise slowly.
-            noiseDB = db < noiseDB ? db * 0.3 + noiseDB * 0.7 : db * 0.02 + noiseDB * 0.98
-            noiseDB = max(noiseDB, -75)
+        frameRemainder.append(contentsOf: buffer)
+        var start = 0
+        while frameRemainder.count - start >= frameSize {
+            consumeFrame(Array(frameRemainder[start..<start + frameSize]))
+            start += frameSize
         }
+        if start > 0 { frameRemainder.removeFirst(start) }
+    }
+
+    private func consumeFrame(_ frame: [Float]) {
+        let seconds = Double(frame.count) / Ears.sampleRate
+        var sum: Float = 0
+        for s in frame { sum += s * s }
+        let db = 10 * log10(max(sum / Float(frame.count), 1e-10))
+
+        // Noise floor = 10th percentile of the last ~5 s. It follows the room both ways:
+        // a pause pulls it down within half a second, and steady background noise
+        // (fans, a crowd) pulls it up within a few seconds, so the gate can never stick open.
+        if recentDB.count < floorWindow { recentDB.append(db) } else {
+            recentDB[recentIndex] = db
+            recentIndex = (recentIndex + 1) % floorWindow
+        }
+        framesSinceFloor += 1
+        if framesSinceFloor >= 5 || recentDB.count < 20 {
+            framesSinceFloor = 0
+            let sorted = recentDB.sorted()
+            noiseDB = max(sorted[sorted.count / 10], -75)
+        }
+        // Hysteresis: a sentence must start clearly above the room noise, but once it has
+        // started, quieter syllables still count, so soft or distant speech is not chopped up.
+        let margin = inUtterance ? max(gateDB - 4, 3) : gateDB
+        let isSpeech = db > max(absMinDB, noiseDB + margin)
 
         if inUtterance {
-            utterance.append(contentsOf: buffer)
+            utterance.append(contentsOf: frame)
             if isSpeech { speechSeconds += seconds; silenceSeconds = 0; candidateText = nil } else { silenceSeconds += seconds }
         } else if isSpeech {
             inUtterance = true
-            utterance = preRollBuf + buffer
+            utterance = preRollBuf + frame
             preRollBuf.removeAll(keepingCapacity: true)
             speechSeconds = seconds
             silenceSeconds = 0
             lastPartialSamples = 0
             lastPartialText = ""
+            fastPasses = 0
+            stableSince = Date()
         } else {
-            preRollBuf.append(contentsOf: buffer)
+            preRollBuf.append(contentsOf: frame)
             let keep = Int(preRoll * Ears.sampleRate)
             if preRollBuf.count > keep { preRollBuf.removeFirst(preRollBuf.count - keep) }
         }
@@ -193,7 +238,18 @@ final class Ears: @unchecked Sendable {
         guard inUtterance else { return }
         let length = Double(utterance.count) / Ears.sampleRate
 
-        if silenceSeconds >= endSilence || length >= maxUtterance {
+        // Safety nets for rooms where the energy gate can't find the pause:
+        // 1. the caption stopped changing -> the friend stopped talking;
+        // 2. we keep "hearing" something but there are no words -> it was noise, drop it.
+        let captionStable = !lastPartialText.isEmpty && fastPasses >= 2
+            && Date().timeIntervalSince(stableSince) >= stableEnd
+        if lastPartialText.isEmpty, fastPasses >= 2, length >= emptyDrop, silenceSeconds < endSilence {
+            if debug { print("[sidecar] dropped \(String(format: "%.1f", length))s of sound with no words") }
+            reset()
+            return
+        }
+
+        if silenceSeconds >= endSilence || length >= maxUtterance || captionStable {
             let audio = utterance
             let hadSpeech = speechSeconds >= minSpeech
             let hadPartial = !lastPartialText.isEmpty
@@ -223,6 +279,8 @@ final class Ears: @unchecked Sendable {
             lastPartialSamples = utterance.count
             let text = await transcribe(utterance, using: fast)
             lastPartialAt = Date()
+            fastPasses += 1
+            if Ears.normalize(text) != Ears.normalize(lastPartialText) { stableSince = Date() }
             if !text.isEmpty, text != lastPartialText, inUtterance {
                 lastPartialText = text
                 await post(text, final: false)

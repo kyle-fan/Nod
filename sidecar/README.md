@@ -10,6 +10,14 @@ swift build -c release          # first build ~2 min
 .build/release/NodSidecar       # serves http://127.0.0.1:8790, posts to the hub on :8000
 ```
 
+`../start.sh` starts Bonsai, this sidecar and the hub together; `../stop.sh` stops them.
+
+How listening works: an energy gate (noise floor = 10th percentile of the last 5 s, so it
+adapts to the room) finds each sentence. While the friend talks, the small model re-transcribes
+the sentence so far for live captions; when they pause, the large model writes the final.
+Two safety nets cover loud rooms: a caption that stops changing for 1.5 s ends the sentence,
+and sound with no words in it is dropped after 2 s.
+
 First run needs the network once to download models into `~/Documents/huggingface/models`
 (TTS 1.7B, Whisper large-v3 turbo, Whisper small.en). After that it loads only from that
 folder and works with Wi-Fi off. The terminal you run it from needs **Microphone** and
@@ -27,7 +35,7 @@ Settings (environment variables, all optional):
 | `NOD_WHISPER_MODEL` | `large-v3-v20240930_626MB` | Model for final sentences |
 | `NOD_WHISPER_FAST` | `small.en` | Model for live partial captions (`""` = use one model) |
 | `NOD_END_SILENCE` | `0.7` | Seconds of pause that end a sentence |
-| `NOD_VAD_DB` | `10` | dB above room noise that counts as speech (raise in a loud room) |
+| `NOD_VAD_DB` | `9` | dB above room noise that counts as speech (raise in a loud room) |
 | `NOD_EARS` | `1` | `0` turns the microphone off |
 | `NOD_AUDIO_FILE` | unset | Test only: feed a wav file instead of the microphone |
 | `NOD_DEBUG` | `0` | `1` logs transcription timings |

@@ -79,7 +79,7 @@ actor Voice {
     /// Speak and return only after playback has finished.
     func speak(_ text: String) async throws -> (audioSeconds: Double, firstAudio: Double, total: Double) {
         let start = Date()
-        var firstAudio: Double = -1
+        let firstAudioBox = FirstAudio()
         MuteGate.shared.begin(text)
         defer { MuteGate.shared.end() }
         // TTSKit's .auto strategy sizes its pre-buffer for the 20 s maximum utterance (~2 s of
@@ -92,10 +92,18 @@ actor Voice {
             text: text, speaker: speaker, language: .english, options: options(),
             playbackStrategy: .buffered(seconds: buffer),
             callback: { _ in
-                if firstAudio < 0 { firstAudio = Date().timeIntervalSince(start) }
+                firstAudioBox.mark(since: start)
                 return nil
             }
         )
-        return (result.audioDuration, firstAudio, Date().timeIntervalSince(start))
+        return (result.audioDuration, firstAudioBox.value, Date().timeIntervalSince(start))
     }
+}
+
+/// Records when the first audio chunk was generated (the callback runs off the actor).
+private final class FirstAudio: @unchecked Sendable {
+    private let lock = NSLock()
+    private var seconds: Double = -1
+    func mark(since start: Date) { lock.withLock { if seconds < 0 { seconds = Date().timeIntervalSince(start) } } }
+    var value: Double { lock.withLock { seconds } }
 }
