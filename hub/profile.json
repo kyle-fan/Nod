@@ -1,0 +1,13 @@
+{
+  "name": "Daniel",
+  "about": [
+    "College student who shares a dorm room with his best friend",
+    "Has young-onset ALS: can't speak clearly or use his hands, can still move his head and face",
+    "Talks short and dry, with a joke when he can",
+    "Loves the Yankees and terrible chemistry puns"
+  ],
+  "people": {
+    "Andrew": "roommate and best friend"
+  },
+  "voice": "warm, slightly raspy young male voice, calm pace"
+}

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Blink</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#0e1116; --panel:#171b22; --text:#e8ecf2; --dim:#8b95a5; --accent:#5eead4; --warn:#fbbf24; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.4 -apple-system, Segoe UI, Roboto, sans-serif;
+         height:100vh; display:grid; grid-template-rows:auto 1fr auto auto; gap:16px; padding:20px 28px; }
+  header { display:flex; justify-content:space-between; align-items:center; }
+  .brand { font-weight:700; letter-spacing:.04em; font-size:20px; }
+  .status { font-size:22px; color:var(--accent); }
+  .pill { font-size:13px; color:var(--dim); border:1px solid #2a313c; border-radius:999px; padding:4px 10px; margin-left:8px; }
+  .pill.bad { color:var(--warn); border-color:var(--warn); }
+  #convo { background:var(--panel); border-radius:16px; padding:18px 22px; overflow-y:auto; }
+  .line { margin:8px 0; font-size:22px; }
+  .friend { color:var(--dim); }
+  .me { color:var(--text); font-weight:600; }
+  .me::before { content:"You: "; color:var(--accent); font-weight:400; }
+  .friend::before { content:"Friend: "; }
+  .partial { color:#5b6574; font-style:italic; }
+  #tiles { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; min-height:140px; }
+  .tile { background:var(--panel); border:3px solid transparent; border-radius:18px; padding:22px 18px;
+          font-size:24px; display:flex; align-items:center; justify-content:center; text-align:center;
+          transition: transform .12s, border-color .12s; }
+  .tile.on { border-color:var(--accent); transform:scale(1.04); background:#13302d; }
+  .tile.meta { color:var(--dim); font-size:20px; }
+  .hint { text-align:center; color:var(--dim); font-size:15px; }
+  #gesture { color:var(--accent); font-weight:600; }
+  footer { display:flex; gap:10px; align-items:center; }
+  footer input { flex:1; background:var(--panel); color:var(--text); border:1px solid #2a313c; border-radius:10px; padding:10px 12px; font-size:15px; }
+  footer button { background:#2a313c; color:var(--text); border:0; border-radius:10px; padding:10px 14px; cursor:pointer; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">BLINK</div>
+  <div class="status" id="status">Connecting...</div>
+  <div><span class="pill" id="model">on-device</span><span class="pill" id="lat">-- ms</span></div>
+</header>
+
+<div id="convo"></div>
+
+<div>
+  <div id="tiles"></div>
+  <p class="hint">Nod = my turn · Tilt = move · Eyebrows = pick · Open mouth = back
+     · last: <span id="gesture">-</span></p>
+</div>
+
+<footer id="dev">
+  <input id="say" placeholder="Dev: type what the friend said, press Enter  (keys: N nod, ← → move, Space pick, Esc back)">
+  <button id="reset">Reset</button>
+  <button id="hide">Hide (D)</button>
+</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+let ws;
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = e => render(JSON.parse(e.data));
+  ws.onclose = () => { $("status").textContent = "Reconnecting..."; setTimeout(connect, 800); };
+}
+
+function render(s) {
+  $("status").textContent = s.status;
+  $("gesture").textContent = s.last_gesture || "-";
+  $("lat").textContent = s.stats.latency_ms != null ? `${(s.stats.latency_ms/1000).toFixed(1)} s / reply` : "-- s";
+  $("model").textContent = s.stats.bonsai_ok ? s.stats.model : "Bonsai offline (fallback)";
+  $("model").classList.toggle("bad", !s.stats.bonsai_ok);
+
+  const c = $("convo");
+  c.innerHTML = s.history.map(t => `<div class="line ${t.who}">${esc(t.text)}</div>`).join("")
+    + (s.partial ? `<div class="line partial">${esc(s.partial)}</div>` : "");
+  c.scrollTop = c.scrollHeight;
+
+  $("tiles").innerHTML = s.tiles.map((t, i) => {
+    const meta = ["more", "done", "home", "kind"].includes(t.kind) ? " meta" : "";
+    return `<div class="tile${meta}${i === s.index ? " on" : ""}">${esc(t.label)}</div>`;
+  }).join("");
+}
+
+function esc(x) { return String(x).replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
+function gesture(name) { ws?.send(JSON.stringify({type: "gesture", name})); }
+
+document.addEventListener("keydown", e => {
+  if (document.activeElement === $("say")) {
+    if (e.key === "Enter" && $("say").value.trim()) {
+      ws.send(JSON.stringify({type: "heard", text: $("say").value}));
+      $("say").value = "";
+    }
+    if (e.key === "Escape") $("say").blur();
+    return;
+  }
+  const map = {n: "nod", N: "nod", ArrowLeft: "left", ArrowRight: "right", " ": "select", Escape: "cancel"};
+  if (map[e.key]) { e.preventDefault(); gesture(map[e.key]); }
+  if (e.key === "d" || e.key === "D") $("dev").classList.toggle("hidden");
+});
+$("reset").onclick = () => ws.send(JSON.stringify({type: "reset"}));
+$("hide").onclick = () => $("dev").classList.add("hidden");
+connect();
+</script>
+</body>
+</html>

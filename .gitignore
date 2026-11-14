@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+hub/models/
+*.gguf
+.DS_Store
+sidecar/.build/
+sidecar/*.xcodeproj/xcuserdata/
+.env
