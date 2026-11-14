@@ -68,7 +68,7 @@ context  ->  Bonsai predicts options  ->  tiles on screen  ->  head gesture pick
 ```
 - `press` = AXPress. `type` = focus the field, set its value (or type keystrokes), do NOT press Enter. Return `{"ok": true}` or `{"ok": false, "error": "..."}`.
 
-## Overlay window (proposed, sidecar side)
+## Overlay window (page built; native window proposed, sidecar side)
 
 Blink should float over whatever app is in use instead of living in a browser tab.
 
@@ -86,7 +86,9 @@ Blink should float over whatever app is in use instead of living in a browser ta
 | Smile (hold 0.25 s) | `select` | Pick highlighted tile. Was eyebrows: they don't read behind glasses. Switch back with `SELECT_SIGNAL` in `hub/face.py` |
 | Open mouth (hold) | `cancel` | Back. From listening: open home menu |
 
-Keyboard fallback in the UI (for dev and as a demo safety net): `N` nod, `←` `→` move, `Space` select, `Esc` cancel.
+Keyboard fallback in the UI (for dev and as a demo safety net): `N` nod, `←` `→` move, `Space` select, `Esc` cancel. `C` recalibrates the camera's neutral pose (sit still for 1.5 s); `POST /recalibrate` on the hub does the same without a focused browser.
+
+Holding a tilt keeps moving the highlight, one tile every 0.9 s.
 
 ## Hub states
 

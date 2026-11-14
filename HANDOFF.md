@@ -47,7 +47,7 @@ USE_CAMERA=1 MOCK_SIDECAR=0 uvicorn hub.main:app --port 8000
 
 - Give the terminal camera permission (System Settings, Privacy & Security, Camera).
 - **Gesture thresholds are per camera and per person.** The values at the top of `hub/face.py` are tuned for Kyle's laptop webcam. Run `--measure` on the Mac with whoever will demo, wearing what they'll wear, and put the suggested values at the top of `hub/face.py`. Kyle is fine with you editing those constants (and only those) in his folder. `FLIP_PITCH` and `FLIP_ROLL` may come out different on the Mac camera.
-- The detector takes its neutral pose from the first 1.5 s after the hub starts. Sit neutral when you launch it.
+- The detector takes its neutral pose from the first 1.5 s after the hub starts. Sit neutral when you launch it. To redo it later, press `C` in the browser tab or run `curl -X POST http://127.0.0.1:8000/recalibrate` (the overlay window has no keyboard focus, so use curl there).
 
 ### 4. Full run with Wi-Fi off
 
@@ -55,12 +55,12 @@ Friend speaks, nod, tilt to a reply, smile to pick, it speaks, and the hub goes 
 
 ## New idea: Blink as an overlay (needs sidecar work)
 
-Kyle wants Blink to feel like an assistant that floats over whatever you're doing: a small pixel-star character with frosted-glass option tiles, sitting over the screen, instead of a browser tab. Kyle is restyling `ui/index.html` for this now. The floating part can only be done natively, so it's yours. It's written up in SPEC.md under "Overlay window (proposed)". In short:
+Kyle wants Blink to feel like an assistant that floats over whatever you're doing: a small pixel-star character with frosted-glass option tiles, sitting over the screen, instead of a browser tab. The page side is done: open `http://127.0.0.1:8000/?overlay=1` in a browser to see exactly what your window will show. The floating part can only be done natively, so it's yours. It's written up in SPEC.md under "Overlay window (proposed)". In short:
 
 1. **A transparent, always-on-top, click-through window** that loads `http://127.0.0.1:8000/?overlay=1` in a WKWebView. Borderless `NSPanel`, non-activating so it never takes focus, floating level, visible on all Spaces, transparent background (`drawsBackground` off on the web view), `ignoresMouseEvents = true`. Full screen width, anchored to the bottom, roughly the bottom third of the screen.
 2. **`/screen` and `/act` must ignore Blink's own window** and target the frontmost real app. This matters even without the overlay: if the tiles live in a browser tab, the browser is the frontmost app and computer mode would read its own UI.
 
-With `?overlay=1` the page will have a transparent background, hide the dev bar, and show only the star, the status line, and the tiles. Without it, the page stays a normal full tab, so the browser version keeps working as a fallback and as the dev setup.
+With `?overlay=1` the page has a transparent background and shows only the star, the status line, and the tiles on dark glass, pinned to the bottom. Without it, the page stays a normal full tab, so the browser version keeps working as a fallback and as the dev setup.
 
 Gestures don't need window focus (the hub reads the camera directly), so a click-through window loses nothing. The keyboard fallback only works in the browser tab.
 

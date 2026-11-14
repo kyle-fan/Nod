@@ -53,6 +53,7 @@ class State:
         self.partial = ""
         self.last_said = ""
         self.last_gesture = ""
+        self.gesture_n = 0   # counts handled gestures so the UI can react to each one
         self.stats = {"latency_ms": None, "model": "Bonsai 2 · on-device", "bonsai_ok": True}
         self.in_computer = False
         self.screen: dict = {}
@@ -64,7 +65,7 @@ class State:
     def view(self):
         return {k: getattr(self, k) for k in
                 ("mode", "status", "tiles", "index", "history", "partial",
-                 "last_gesture", "stats", "in_computer")}
+                 "last_gesture", "gesture_n", "stats", "in_computer")}
 
 
 S = State()
@@ -189,6 +190,7 @@ async def run_action(action):
 
 async def handle(gesture):
     S.last_gesture = gesture
+    S.gesture_n += 1
     if S.mode in ("thinking", "speaking"):
         return   # ignore input while busy
 
@@ -289,6 +291,15 @@ async def heard(h: Heard):
     return {"ok": True}
 
 
+@app.post("/recalibrate")
+async def recalibrate():
+    """Re-learn the neutral face pose (UI key C, or curl from anywhere on the machine)."""
+    det = getattr(app.state, "detector", None)
+    if det:
+        det.recalibrate()
+    return {"ok": det is not None}
+
+
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
@@ -301,6 +312,8 @@ async def ws_endpoint(ws: WebSocket):
                 asyncio.create_task(on_gesture(msg["name"]))
             elif msg.get("type") == "heard":   # dev box: type what the friend said
                 await heard(Heard(text=msg.get("text", ""), final=True))
+            elif msg.get("type") == "recalibrate":
+                await recalibrate()
             elif msg.get("type") == "reset":
                 S.history.clear()
                 go_listen()
@@ -319,8 +332,9 @@ async def startup():
     if config.USE_CAMERA:
         from .face import GestureDetector
         loop = asyncio.get_running_loop()
-        GestureDetector(
+        app.state.detector = GestureDetector(
             on_event=lambda g: asyncio.run_coroutine_threadsafe(on_gesture(g), loop),
             camera_index=config.CAMERA_INDEX,
-        ).start()
+        )
+        app.state.detector.start()
     print(f"[hub] mock sidecar: {config.MOCK_SIDECAR}  camera: {config.USE_CAMERA}")
