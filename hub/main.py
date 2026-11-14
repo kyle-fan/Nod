@@ -79,6 +79,12 @@ def go_listen(status="Listening"):
 
 async def show_replies(kind=None):
     prev = [t["label"] for t in S.tiles if t.get("kind") == "say"]
+    task = S.pregen_task
+    if kind is None and not S.pregen and task and not task.done():
+        # Nodded while pre-generation is mid-flight: wait for it, don't start a duplicate call.
+        S.mode, S.status, S.tiles = "thinking", "Thinking...", []
+        await broadcast()
+        await asyncio.wait([task])   # doesn't raise if the task was cancelled
     if kind is None and S.pregen and S.pregen[0] == len(S.history):
         replies, ms, ok = S.pregen[1], 0, True   # pre-generated during the pause
     else:

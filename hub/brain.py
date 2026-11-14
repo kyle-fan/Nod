@@ -40,7 +40,22 @@ def _prompt(file: str, **kw) -> str:
     return (config.PROMPTS_DIR / file).read_text(encoding="utf-8").format(**kw)
 
 
-async def _chat(prompt: str, max_tokens: int = 220) -> str:
+# llama-server grammar-constrains output to this, so Bonsai can't emit broken JSON.
+REPLY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "replies": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1, "maxLength": 90},
+            "minItems": 3,
+            "maxItems": 3,
+        }
+    },
+    "required": ["replies"],
+}
+
+
+async def _chat(prompt: str, max_tokens: int = 220, schema: dict | None = None) -> str:
     payload = {
         "model": config.BONSAI_MODEL,
         "messages": [{"role": "user", "content": prompt}],
@@ -49,6 +64,9 @@ async def _chat(prompt: str, max_tokens: int = 220) -> str:
         # Bonsai 2 reasons by default; turn it off for fast replies.
         "chat_template_kwargs": {"enable_thinking": False},
     }
+    if schema:
+        payload["response_format"] = {"type": "json_schema",
+                                      "json_schema": {"name": "out", "schema": schema}}
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(config.BONSAI_URL, json=payload)
         r.raise_for_status()
@@ -77,10 +95,11 @@ async def suggest_replies(history: list[dict], kind: str | None = None,
                      history=_history_text(history, p["name"]), kind_instruction=instr)
     t0 = time.perf_counter()
     try:
-        out = await _chat(prompt)
+        out = await _chat(prompt, schema=REPLY_SCHEMA)
         replies = [str(r).strip() for r in _parse_json(out, "replies") if str(r).strip()]
-        if not replies:  # model ignored JSON: take non-empty lines instead
-            replies = [l.strip("-•* \"") for l in out.splitlines() if l.strip()]
+        if not replies:  # malformed JSON: salvage the quoted strings, never raw lines
+            quoted = re.findall(r'"((?:[^"\\]|\\.)+)"', out)
+            replies = [q.strip() for q in quoted if q.strip() and q != "replies"]
         ok = True
     except Exception as e:  # Bonsai down: keep the demo moving
         print(f"[brain] Bonsai error: {e}")
