@@ -25,7 +25,7 @@ final class Ears: @unchecked Sendable {
     private let maxUtterance = 20.0
     private let preRoll = 0.4
     private let gateDB: Float             // dB above the noise floor that counts as speech
-    private let absMinDB: Float = -55
+    private let absMinDB: Float           // nothing quieter than this is ever speech (NOD_MIN_DB)
     private let partialGap = 0.25         // => at most ~4 partials per second
     private let frameSize = 480           // 30 ms analysis frames
     private let floorWindow = 167         // frames kept for the noise floor (~5 s)
@@ -87,6 +87,7 @@ final class Ears: @unchecked Sendable {
         self.endSilence = Double(env["NOD_END_SILENCE"] ?? "") ?? 0.7
         self.midSentenceExtra = Double(env["NOD_MID_SENTENCE_EXTRA"] ?? "") ?? 0.6
         self.gateDB = Float(env["NOD_VAD_DB"] ?? "") ?? 9
+        self.absMinDB = Float(env["NOD_MIN_DB"] ?? "") ?? -55
         self.debug = env["NOD_DEBUG"] == "1"
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest = 2

@@ -36,6 +36,7 @@ Settings (environment variables, all optional):
 | `NOD_WHISPER_FAST` | `small.en` | Model for live partial captions (`""` = use one model) |
 | `NOD_END_SILENCE` | `0.7` | Seconds of pause that end a sentence |
 | `NOD_VAD_DB` | `9` | dB above room noise that counts as speech (raise in a loud room) |
+| `NOD_MIN_DB` | `-55` | Nothing quieter than this counts as speech. In a loud hall other tables get captioned: watch the level on the hub's `/debug` page while the friend talks and while they don't, and set this between the two (often around `-35`) |
 | `NOD_EARS` | `1` | `0` turns the microphone off |
 | `NOD_AUDIO_FILE` | unset | Test only: feed a wav file instead of the microphone |
 | `NOD_DEBUG` | `0` | `1` logs transcription timings |
