@@ -2,9 +2,12 @@
 
 Everything here is on the local branch `overnight`. Nothing was pushed, `main` is untouched, and the state before the night is tagged `pre-overnight-2026-11-15`.
 
+**Your `~/Nod` folder is already on `overnight`**, so `./start.sh` runs the new version as it is.
+
 ```bash
-git checkout overnight          # the new work
-git checkout main               # exactly what you had last night
+git branch --show-current       # overnight
+git checkout main               # exactly what you had last night (stop Nod first: ./stop.sh)
+git checkout overnight          # back to the new work
 git diff main overnight --stat  # what changed
 ```
 
@@ -15,7 +18,7 @@ No sound was played and no text message was sent. One side effect on your Mac: a
 Run these from Terminal (it has the permissions).
 
 ```bash
-cd ~/Nod && git checkout overnight
+cd ~/Nod
 ./test.sh                                   # 1. fast checks: should end "ALL TESTS PASSED"
 NOD_OVERLAY=1 USE_CAMERA=1 ./start.sh       # 2. sit neutral while it starts
 ./doctor.sh                                 # 3. everything should say OK
