@@ -44,6 +44,7 @@ class GestureLogic:
         self._tilt_at = 0.0
         self._tilt_armed = True
         self._last_tilt_active = 0.0
+        self._last_jaw_active = 0.0
         self._sel_since = self._jaw_since = None
         self._sel_armed = self._jaw_armed = True
         self._hist = deque()        # (t, pitch, |roll|) for the nod window
@@ -112,12 +113,17 @@ class GestureLogic:
         self._hist.append((now, p, abs(r)))
         while self._hist and now - self._hist[0][0] > t.nod_window:
             self._hist.popleft()
-        if now - self._last_tilt_active > t.nod_after_tilt and len(self._hist) >= 4:
+        if j > t.jaw_t * 0.5:
+            self._last_jaw_active = now        # opening the mouth tips the head down a little
+        if (now - self._last_tilt_active > t.nod_after_tilt and now - self._last_jaw_active > 0.6
+                and len(self._hist) >= 4):
             low_i = min(range(len(self._hist)), key=lambda i: self._hist[i][1])
             low = self._hist[low_i][1]
             before = max((h[1] for h in list(self._hist)[:low_i + 1]), default=low)
             level = max(h[2] for h in self._hist) < t.tilt_deg * 0.8
-            dipped = before - low > t.nod_deg
+            # Deep enough both ways of measuring: from where the head just was, and from
+            # neutral. The second stops a look up followed by a small look down counting.
+            dipped = before - low > t.nod_deg and low < -t.nod_deg * 0.8
             back_up = p - low > t.nod_deg * 0.6
             if level and dipped and back_up and low_i < len(self._hist) - 1:
                 if self._fire("nod", now, out):
@@ -148,3 +154,58 @@ class GestureLogic:
 
         self.last = (p, r, s, j)
         return out
+
+
+class ClassicLogic(GestureLogic):
+    """The rules as they were before 15 Nov: everything measured against the pose learned
+    at start-up, no drift correction. Kept as a fallback: NOD_GESTURES=classic."""
+
+    def feed(self, now, pitch, roll, sel, jaw):
+        t, out = self.t, []
+        self._recent.append((pitch, roll, sel, jaw))
+        if len(self._recent) == 3:
+            pitch, roll, sel, jaw = (sorted(c)[1] for c in zip(*self._recent))
+        if self.base is None:
+            self._t_start = self._t_start or now
+            self._calib.append((pitch, roll, sel, jaw))
+            if now - self._t_start > t.calibrate_s:
+                self.base = [sorted(c)[len(c) // 2] for c in zip(*self._calib)]
+            return out
+        p, r, s, j = (pitch - self.base[0], roll - self.base[1], sel - self.base[2], jaw - self.base[3])
+        if abs(r) > t.tilt_deg:
+            if self._tilt_armed or (t.tilt_repeat and now - self._tilt_at > t.tilt_repeat):
+                if self._fire("right" if r > 0 else "left", now, out):
+                    self._tilt_armed, self._tilt_at = False, now
+        elif abs(r) < t.tilt_reset:
+            self._tilt_armed = True
+        self._hist.append((now, p, abs(r)))
+        while self._hist and now - self._hist[0][0] > t.nod_window:
+            self._hist.popleft()
+        if abs(r) < 8 and p > -3 and any(v < -t.nod_deg for _, v, _ in self._hist):
+            if self._fire("nod", now, out):
+                self._hist.clear()
+        if abs(p) > t.nod_deg * 0.5 or abs(r) > t.tilt_reset:
+            self._head_moved = now
+        steady = t.select_signal != "brow" or now - self._head_moved > t.brow_quiet
+        if s > t.select_t and steady and self._sel_armed:
+            self._sel_since = self._sel_since or now
+            if now - self._sel_since > t.select_hold and self._fire("select", now, out):
+                self._sel_armed = False
+        else:
+            if not steady:
+                self._sel_since = None
+            if s < t.select_t * 0.5:
+                self._sel_since, self._sel_armed = None, True
+        if j > t.jaw_t and self._jaw_armed:
+            self._jaw_since = self._jaw_since or now
+            if now - self._jaw_since > t.jaw_hold and self._fire("cancel", now, out):
+                self._jaw_armed = False
+        elif j < t.jaw_t * 0.5:
+            self._jaw_since, self._jaw_armed = None, True
+        self.last = (p, r, s, j)
+        return out
+
+
+def make_logic(tuning: Tuning | None = None) -> GestureLogic:
+    import os
+    return (ClassicLogic if os.getenv("NOD_GESTURES", "").lower() == "classic" else GestureLogic)(tuning)

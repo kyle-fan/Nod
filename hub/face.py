@@ -88,8 +88,8 @@ class GestureDetector:
 
     def run(self):
         """The gesture rules live in hub/gestures.py (testable without a camera)."""
-        from .gestures import GestureLogic
-        logic = GestureLogic(self.tuning())
+        from .gestures import make_logic
+        logic = make_logic(self.tuning())   # NOD_GESTURES=classic switches to the older rules
         was_calibrating = True
         last_face = time.time()
         for reading in signals(self.camera_index, self._stop, misses=True):

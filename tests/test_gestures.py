@@ -146,6 +146,53 @@ def test_looking_up_is_not_a_nod():
     assert t.names() == []
 
 
+def test_opening_the_mouth_dips_the_head_but_is_not_a_nod():
+    """Measured: opening the mouth wide moved pitch between -6.9 and +2.2 degrees."""
+    t = Trace()
+    for _ in range(3):
+        t.move(0.25, jaw=0.89, pitch=-7).hold(0.5).move(0.25, jaw=0.0, pitch=2).move(0.2, pitch=0).hold(0.8)
+    assert t.names() == ["cancel", "cancel", "cancel"], t.events
+
+
+def test_raising_eyebrows_is_nothing_when_select_is_smile():
+    t = Trace()
+    for _ in range(3):
+        t.move(0.2, pitch=-3.4).move(0.2, pitch=1.9).move(0.2, pitch=0).hold(0.5)
+    assert t.names() == []
+
+
+def test_look_up_then_small_look_down_is_not_a_nod():
+    t = Trace().move(0.3, pitch=6).move(0.3, pitch=-5).move(0.3, pitch=0).hold(1)
+    assert t.names() == []
+
+
+def test_jittery_camera_does_not_fire_anything():
+    import random
+    rnd = random.Random(7)
+    t = Trace()
+    for _ in range(FPS * 20):                      # 20 s of sitting still with tracking noise
+        t.pose = [rnd.uniform(-1.5, 1.0), rnd.uniform(-0.7, 1.7), rnd.uniform(0, 0.02), rnd.uniform(0, 0.03)]
+        t._step()
+    assert t.names() == [], t.events
+
+
+def test_classic_rules_are_still_available_and_show_the_old_weaknesses():
+    from hub.gestures import ClassicLogic
+    class Old(Trace):
+        def __init__(self):
+            self.g = ClassicLogic()
+            self.t = 0.0
+            self.pose = [0.0, 0.0, 0.0, 0.0]
+            self.events = []
+            self.hold(2.0)
+    assert Old().nod().hold(1).names() == ["nod"]
+    slumped = Old().move(20, pitch=-10).hold(3).nod(depth=15).hold(1)
+    assert slumped.names() == [], "the old rules lose nods after a slump"
+    assert Trace().move(20, pitch=-10).hold(3).nod(depth=15).hold(1).names() == ["nod"], "the new ones keep them"
+    tilt = Old().move(0.4, roll=-15, pitch=-20).hold(0.2).move(0.4, roll=0, pitch=0).hold(1.2)
+    assert "nod" in tilt.names(), "the old rules read a dipping tilt as a nod"
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in sorted(globals().items()):
