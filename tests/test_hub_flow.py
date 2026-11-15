@@ -348,6 +348,21 @@ async def test_confirmation_can_be_answered_while_it_is_spoken():
         sidecar.speak = old
 
 
+async def test_replies_follow_the_friend_if_they_keep_talking():
+    await fresh()
+    await friend("want to grab food")
+    await g("nod")
+    CALLS.clear()
+    await friend("actually never mind, I'm not hungry")     # he hasn't touched the tiles
+    await asyncio.sleep(0.05)
+    assert "reply" in CALLS and S.mode == "choose", CALLS
+    await g("right")                                         # now he is choosing
+    CALLS.clear()
+    await friend("or maybe later")
+    await asyncio.sleep(0.05)
+    assert CALLS == [] and S.index == 1, "tiles he is choosing from must not change under him"
+
+
 async def test_quick_phrases_need_no_model():
     await fresh()
     CALLS.clear()

@@ -86,6 +86,7 @@ class State:
         self.paused = False                # "Stop listening": what is heard is thrown away
         self.text_to = ""                  # who "Text someone" is writing to
         self.last_input = time.time()      # last gesture, for putting stale tiles away
+        self.tiles_at = 0.0                # when the tiles on screen were put up
         self.done: list[str] = []          # computer steps taken this session
         self.pregen: tuple | None = None   # (history_len, replies, offer_computer, bonsai_ok)
         self.pregen_task: asyncio.Task | None = None
@@ -118,6 +119,7 @@ async def broadcast():
 
 def set_tiles(tiles, mode="choose", status="Choose"):
     S.tiles, S.index, S.mode, S.status = tiles, 0, mode, status
+    S.tiles_at = time.time()
 
 
 def go_listen(status="Listening"):
@@ -643,8 +645,24 @@ async def heard(h: Heard):
         if S.pregen_task:
             S.pregen_task.cancel()
         S.pregen_task = asyncio.create_task(pregenerate(len(S.history)))
+        # The friend kept talking after he nodded and he hasn't touched the tiles yet:
+        # the replies on screen answer the old line, so write new ones for what was just said.
+        if (S.mode == "choose" and S.tiles and S.tiles[-1].get("kind") == "more"
+                and S.last_input <= S.tiles_at and not lock.locked()):
+            asyncio.create_task(refresh_replies())
     await broadcast()
     return {"ok": True}
+
+
+async def refresh_replies():
+    async with lock:
+        if S.mode == "choose" and S.last_input <= S.tiles_at:
+            try:
+                await show_replies()
+            except Exception as e:
+                print(f"[hub] couldn't refresh replies: {e!r}")
+                go_listen()
+    await broadcast()
 
 
 @app.post("/incoming")
