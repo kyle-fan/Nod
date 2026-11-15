@@ -209,13 +209,14 @@
     <div id="chip"></div>
   </div>
   <div id="tiles"></div>
-  <p class="hint">nod = my turn · tilt = move (hold to keep moving) · smile = pick · open mouth = back</p>
+  <p class="hint" id="hint">open mouth = my turn · tilt = move (hold to keep moving) · smile = pick · nod = back</p>
 </div>
 
 <footer id="dev">
   <input id="say" placeholder="Dev: type what the friend said, press Enter. Or: /text Andrew: where are you   (keys: N nod · 1-5 pick a tile · ← → move · Space pick · Esc back · C recalibrate camera · D hide this bar)">
   <label class="opt" title="Texting someone in the profile takes 3 picks instead of 5"><input type="checkbox" id="optExpress"> Express texts</label>
   <label class="opt" title="Remember the replies he picks and use them as examples of his voice"><input type="checkbox" id="optLearn"> Learn replies</label>
+  <label class="opt" title="On: open mouth = my turn, nod = back. Off: nod = my turn, open mouth = back"><input type="checkbox" id="optSwap"> Mouth = my turn</label>
   <label class="opt" title="Last night's gesture rules, if the new ones misfire on your face. Sit neutral for two seconds after switching"><input type="checkbox" id="optClassic"> Classic gestures</label>
   <a class="opt" href="/debug" target="_blank" title="Live gesture readings, microphone level, timings and a log">Under the hood</a>
   <button id="reset">Reset</button>
@@ -251,16 +252,17 @@ const STAR = [
 })();
 
 let ws, lastTiles = "", lastConvo = "", lastGestureN = null, lastCaption = "", captionTimer = null;
-const GESTURE_LABEL = {nod: "nod", left: "← tilt", right: "tilt →", select: "smile ✓", cancel: "back"};
+const GESTURE_LABEL = {nod: "my turn", left: "← tilt", right: "tilt →", select: "smile ✓", cancel: "back"};
 const SUB = {listen: "Nod when it's your turn", computer: "Pick the next step"};
+let swapped = true, shownSwap = null;   // open mouth = my turn, nod = back (the hub says which)
 
-const WELCOME = `<div id="welcome">
+const welcome = () => `<div id="welcome">
   <h2>Talk and use your Mac with your face</h2>
   <p class="lead">A friend talks. Blink suggests what you might say or do. You choose with small head and face movements, and it speaks or acts for you. Everything runs on this Mac, with Wi-Fi off.</p>
-  <div class="how glass"><div class="ico">↕</div><b>Nod</b><span>It's my turn: show me replies</span></div>
+  <div class="how glass"><div class="ico">${swapped ? "◯" : "↕"}</div><b>${swapped ? "Open your mouth" : "Nod"}</b><span>It's my turn: show me replies</span></div>
   <div class="how glass"><div class="ico">↔</div><b>Tilt your head</b><span>Move the highlight left or right</span></div>
   <div class="how glass"><div class="ico">☺</div><b>Smile</b><span>Pick the highlighted tile</span></div>
-  <div class="how glass"><div class="ico">◯</div><b>Open your mouth</b><span>Go back, or open the menu</span></div>
+  <div class="how glass"><div class="ico">${swapped ? "↕" : "◯"}</div><b>${swapped ? "Nod" : "Open your mouth"}</b><span>Go back, or open the menu</span></div>
 </div>`;
 
 function connect() {
@@ -293,7 +295,13 @@ function render(s) {
     else $("caption").classList.remove("show");
   }
 
-  if (s.settings) { $("optExpress").checked = s.settings.express; $("optLearn").checked = s.settings.learn; $("optClassic").checked = !!s.settings.classic_gestures; }
+  if (s.settings) { $("optExpress").checked = s.settings.express; $("optLearn").checked = s.settings.learn; $("optClassic").checked = !!s.settings.classic_gestures;
+    swapped = !!s.settings.swap_nod_mouth; $("optSwap").checked = swapped;
+    if (swapped !== shownSwap) {
+      shownSwap = swapped; lastConvo = "";   // redraw the welcome card with the right gestures
+      $("hint").textContent = swapped ? "open mouth = my turn · tilt = move (hold to keep moving) · smile = pick · nod = back"
+                                      : "nod = my turn · tilt = move (hold to keep moving) · smile = pick · open mouth = back";
+    } }
 
   // alerts: things that stop it working, said plainly
   const cam = s.camera || {}, al = [];
@@ -313,7 +321,8 @@ function render(s) {
           .replace(/^Typed (".*") into .*$/, "wrote $1").replace(/^Opened /, "opened "))}</span>`).join("");
 
   const confirming = s.tiles.some(t => t.kind === "confirm");
-  const sub = confirming ? "Tilt to Yes and smile to confirm" : s.mode in SUB ? SUB[s.mode] : "";
+  const sub = confirming ? "Tilt to Yes and smile to confirm"
+            : s.mode === "listen" ? (swapped ? "Open your mouth when it's your turn" : SUB.listen) : s.mode in SUB ? SUB[s.mode] : "";
   $("bubble").innerHTML = esc(s.status) + (sub ? `<small>${sub}</small>` : "");
   $("lat").textContent = s.stats.latency_ms != null ? `${(s.stats.latency_ms / 1000).toFixed(1)} s / reply` : "-- s";
   $("model").textContent = s.stats.bonsai_ok ? s.stats.model : "Bonsai offline (fallback)";
@@ -324,7 +333,7 @@ function render(s) {
   if (convoKey !== lastConvo) {
     lastConvo = convoKey;
     const recent = s.history.slice(-6);
-    $("convo").innerHTML = (recent.length || s.partial ? "" : WELCOME)
+    $("convo").innerHTML = (recent.length || s.partial ? "" : welcome())
       + recent.map((t, i) => {
           const who = t.who === "text" ? ` data-who="${esc(t.from)} · text message"`
                     : t.who === "me_text" ? ` data-who="You · texted ${esc(t.to)}"` : "";
@@ -404,6 +413,7 @@ $("tiles").addEventListener("click", e => {
 });
 $("optExpress").onchange = e => send({type: "settings", express: e.target.checked});
 $("optLearn").onchange = e => send({type: "settings", learn: e.target.checked});
+$("optSwap").onchange = e => send({type: "settings", swap_nod_mouth: e.target.checked});
 $("optClassic").onchange = e => send({type: "settings", classic_gestures: e.target.checked});
 $("reset").onclick = () => send({type: "reset"});
 $("hide").onclick = () => $("dev").classList.add("hidden");

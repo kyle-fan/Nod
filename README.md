@@ -33,10 +33,12 @@ Nothing leaves the machine. There is no account, no cloud call, and no telemetry
 
 | Gesture | Meaning |
 |---|---|
-| Nod | My turn: show replies (or answer the text that just came in) |
+| Open mouth | My turn: show replies (or answer the text that just came in) |
 | Tilt head left / right | Move the highlight. Hold to keep moving |
 | Smile | Pick the highlighted tile |
-| Open mouth | Back. From listening: open the menu |
+| Nod | Back. From listening: open the menu |
+
+The mouth and the nod can be swapped back (nod = my turn) with `NOD_SWAP=0 ./start.sh` or the **Mouth = my turn** checkbox in the dev bar.
 
 Keyboard and mouse work too, for rehearsal or a helper: `N` nod, `←` `→` move, `Space` pick, `Esc` back, `1`-`5` or a click to pick a tile directly, `C` relearn the neutral face, `D` hide the dev bar.
 
@@ -68,6 +70,7 @@ Useful switches (all optional, set before `./start.sh`):
 | `NOD_TTS_SPEAKER`, `NOD_TTS_STYLE` | Voice and how it speaks (see `sidecar/README.md`) |
 | `LEARN=0` | Don't remember picked replies |
 | `EXPRESS=1` | Texting someone in the profile takes 3 picks instead of 5: agree, pick a wording, confirm |
+| `NOD_SWAP=0` | Nod = my turn and open mouth = back (the default is the other way round) |
 | `NOD_GESTURES=classic` | The older gesture rules, if the new ones don't suit your face. The dev bar's **Classic gestures** checkbox switches while running |
 
 First run needs Wi-Fi once to download the speech and face models. After that everything loads from disk.

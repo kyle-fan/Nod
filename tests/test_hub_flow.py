@@ -11,7 +11,7 @@ import re
 import sys
 from pathlib import Path
 
-os.environ.update(MOCK_SIDECAR="1", USE_CAMERA="0")
+os.environ.update(MOCK_SIDECAR="1", USE_CAMERA="0", NOD_SWAP="0")   # the tests use nod = my turn; the swap has its own test
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from hub import brain, config, main, sidecar   # noqa: E402
 
@@ -496,7 +496,7 @@ async def test_express_texting_is_three_picks():
 async def test_settings_can_be_switched_while_running():
     await fresh()
     try:
-        want = {"express": True, "learn": False, "classic_gestures": False}
+        want = {"express": True, "learn": False, "classic_gestures": False, "swap_nod_mouth": False}
         assert (await main.set_settings({"express": True, "learn": False})) == want
         assert S.view()["settings"] == want
         await friend("can you tell Andrew to come back")
@@ -767,6 +767,25 @@ async def test_malformed_page_messages_do_not_close_the_connection():
     await asyncio.sleep(0.05)
     assert ws not in main.clients                       # tidied up when the page went away
     assert S.history[-1]["text"] == "want to grab food"  # the good message after the bad ones still arrived
+
+
+async def test_camera_gestures_can_be_swapped_open_mouth_is_my_turn():
+    await fresh()
+    await main.set_settings({"swap_nod_mouth": True})
+    try:
+        await friend("want to grab food")
+        await main.on_gesture("cancel", source="camera")       # the camera saw an open mouth
+        assert S.mode == "choose" and labels()[0] == "yeah one sec", (S.mode, labels())
+        await main.on_gesture("nod", source="camera")          # the camera saw a nod: back
+        assert S.mode == "listen" and S.tiles == []
+        await g("nod")                                         # the keyboard's N still means my turn
+        assert S.mode == "choose"
+        await g("cancel")
+        await text_arrives()
+        assert S.status == "Andrew texted you. Open your mouth to answer", S.status
+    finally:
+        await main.set_settings({"swap_nod_mouth": False})
+    assert S.status == "Andrew texted you. Nod to answer", S.status
 
 
 async def test_open_mouth_goes_back():

@@ -138,6 +138,11 @@ def set_tiles(tiles, mode="choose", status="Choose"):
     S.tiles_at = time.time()
 
 
+def turn_word() -> str:
+    """What he does to say "my turn", for the messages on screen."""
+    return "Open your mouth" if config.SWAP_NOD_MOUTH else "Nod"
+
+
 def go_listen(status="Listening"):
     S.mode, S.status, S.tiles, S.index, S.in_computer, S.pending = "listen", status, [], 0, False, None
     if status != "Listening":
@@ -147,9 +152,9 @@ def go_listen(status="Listening"):
         except RuntimeError:
             pass
     if status == "Listening" and S.paused:
-        S.status = "Not listening. Nod to listen again"
+        S.status = f"Not listening. {turn_word()} to listen again"
     elif status == "Listening" and text_waiting():
-        S.status = f'{S.incoming["from"]} texted you. Nod to answer'
+        S.status = f'{S.incoming["from"]} texted you. {turn_word()} to answer'
 
 
 SETTLE_S = 5.0
@@ -502,7 +507,7 @@ async def show_actions(note=""):
         set_tiles([done] + tiles, mode="computer", status=note or "That looks done")
     elif not tiles:
         set_tiles([done], mode="computer",
-                  status=note or ("Nothing more to do here" if ok else "Bonsai didn't answer. Nod to try again"))
+                  status=note or ("Nothing more to do here" if ok else f"Bonsai didn't answer. {turn_word()} to try again"))
     else:
         set_tiles(tiles + [done], mode="computer", status=note or f"Computer · {app}")
 
@@ -743,11 +748,15 @@ async def on_pick(index):
         except Exception:
             import traceback
             traceback.print_exc()
-            go_listen(status="Something went wrong. Nod to try again")
+            go_listen(status=f"Something went wrong. {turn_word()} to try again")
     await broadcast()
 
 
 async def on_gesture(gesture, source="keyboard"):
+    if source == "camera" and config.SWAP_NOD_MOUTH:
+        # open mouth = my turn, nod = back. Only what the face does is swapped; the meaning
+        # ("nod" = my turn, "cancel" = back) stays the same everywhere else in the hub.
+        gesture = {"nod": "cancel", "cancel": "nod"}.get(gesture, gesture)
     if lock.locked():
         note("gesture", f"{gesture} ({source}) ignored: busy")
         return   # busy (thinking/speaking): drop the gesture instead of queueing it
@@ -762,7 +771,7 @@ async def on_gesture(gesture, source="keyboard"):
         except Exception as e:   # a bug or a dead helper must never freeze the screen
             import traceback
             traceback.print_exc()
-            go_listen(status="Something went wrong. Nod to try again")
+            go_listen(status=f"Something went wrong. {turn_word()} to try again")
     await broadcast()
 
 
@@ -874,7 +883,7 @@ async def ws_message(msg: dict):
     elif kind == "heard":   # dev box: type what the friend said
         await heard(Heard(text=str(msg.get("text") or ""), final=True))
     elif kind == "settings":
-        await set_settings({k: msg[k] for k in ("express", "learn", "classic_gestures") if k in msg})
+        await set_settings({k: msg[k] for k in ("express", "learn", "classic_gestures", "swap_nod_mouth") if k in msg})
     elif kind == "pick":
         asyncio.create_task(on_pick(int(msg.get("index", -1))))
     elif kind == "incoming":   # dev box: "/text Andrew: where are you"
@@ -891,7 +900,8 @@ async def ws_message(msg: dict):
 
 
 def settings_view():
-    return {"express": config.EXPRESS, "learn": config.LEARN, "classic_gestures": config.CLASSIC_GESTURES}
+    return {"express": config.EXPRESS, "learn": config.LEARN, "classic_gestures": config.CLASSIC_GESTURES,
+            "swap_nod_mouth": config.SWAP_NOD_MOUTH}
 
 
 @app.get("/settings")
@@ -907,6 +917,11 @@ async def set_settings(body: dict):
         config.EXPRESS = bool(body["express"])
     if "learn" in body:
         config.LEARN = bool(body["learn"])
+    if "swap_nod_mouth" in body and bool(body["swap_nod_mouth"]) != config.SWAP_NOD_MOUTH:
+        config.SWAP_NOD_MOUTH = bool(body["swap_nod_mouth"])
+        note("settings", "open mouth = my turn, nod = back" if config.SWAP_NOD_MOUTH else "nod = my turn, open mouth = back")
+        if S.mode == "listen":
+            go_listen()          # rewrite a "... to answer" line on screen
     if "classic_gestures" in body and bool(body["classic_gestures"]) != config.CLASSIC_GESTURES:
         config.CLASSIC_GESTURES = bool(body["classic_gestures"])   # the camera thread picks this up on its next frame
         note("settings", "classic gesture rules" if config.CLASSIC_GESTURES else "current gesture rules")

@@ -179,7 +179,7 @@ Prompt files (`prompts/*.txt`) have two parts split by a line of `=====`. Above 
 
 `GET /demo` and `/demo/game` on the hub are a stand-in sports page and game player (`ui/demo/`), so the Safari chain can be shown with Wi-Fi off.
 
-`GET /settings` and `POST /settings {"express": true, "learn": false, "classic_gestures": false}` on the hub switch those options while it runs (the dev bar has checkboxes for them; `classic_gestures` swaps the gesture rules and relearns the neutral face). `GET /status` reports whether Bonsai, the sidecar and the camera are alive.
+`GET /settings` and `POST /settings {"express": true, "learn": false, "classic_gestures": false, "swap_nod_mouth": true}` on the hub switch those options while it runs (the dev bar has checkboxes for them; `classic_gestures` swaps the gesture rules and relearns the neutral face; `swap_nod_mouth`, on by default and `NOD_SWAP=0` to turn off, makes the camera's open mouth mean "nod" (my turn) and its nod mean "cancel" (back), while gesture names on the wire and the keyboard keep their meaning). `GET /status` reports whether Bonsai, the sidecar and the camera are alive.
 
 The page takes `?overlay=1` (floating version) and `?scale=1.3` (everything bigger).
 
