@@ -121,7 +121,8 @@ What keeps it safe:
 ## Tests
 
 ```bash
-./test.sh        # 50 checks in a few seconds: no model, camera, microphone or network needed
+./test.sh        # over 60 checks in a few seconds: no model, camera, microphone or network needed
+./test.sh --all  # also runs the real sidecar on a recording, silently (about a minute)
 ```
 
 They cover the gesture rules on made-up head traces, the camera thread with fake frames, the whole hub loop against the pretend Mac with a stand-in model (talk, texting, answering a text, confirmations, failures), and the fixed rules around Bonsai's answers.

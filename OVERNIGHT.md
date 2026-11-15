@@ -42,6 +42,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 
 - **27 of 27** practice chains ended correctly (right person, right message, or right page), always picking the first tile. Before the fixes below it was 16 of 18.
 - **Wrong recipient fixed.** "Let mom know I'll call her tonight" used to open Andrew's chat, because the profile calls him the best friend. The person the friend names is now always the recipient, and the confirmation says who it goes to: `Send "i'll call you tonight" to Mom?`
+- **No chat, no guess.** If the person has no chat on screen, the only tile is Done ("Can't see a chat with Coach in Messages"). Last night it opened someone else's chat. And if another person's chat is open, nothing can be typed or sent there: "Back to conversations" comes first.
 - **Never stuck.** A sidecar restart mid-speech (what froze it on "Speaking" last night), a Bonsai failure, or any error now returns to listening with a plain message.
 - **No repeated steps**, and Send is always the first tile once a message is typed.
 - **Knows when it is finished**: "That looks done" with Done first, after Play or after opening the page that was asked for.
@@ -49,14 +50,17 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 
 ### Gestures
 
-- A nod is now a dip and return relative to where your head just was, and "neutral" slowly follows you. Slumping or leaning no longer kills nods. This was the 3 degree rule I described last night.
-- The dip that comes with a left tilt (20 degrees for you) is no longer read as a nod.
+- A nod is now a dip and return relative to where your head just was, and "neutral" slowly follows you, so nods keep working after you slump or lean. Under the old rules a slump of about 10 degrees lost them.
+- The dip that comes with a left tilt (20 degrees for you) is no longer read as a nod. Opening your mouth, which also tips the head, isn't either.
+- If the new rules feel worse on your face, `NOD_GESTURES=classic ./start.sh` brings back last night's.
+- `python -m hub.face --record trace.json` saves 40 s of your real gestures; `--replay trace.json` shows what the new and the old rules fire on it. If something misfires, record it and send me the file.
 - The screen says "Learning your neutral face", "Can't see your face", or "Camera not available" when that is the problem.
 
 ### New things it can do
 
 - **Answer a text that arrives.** "Andrew texted you. Nod to answer" gives three answers; one pick opens Messages, opens the chat and types it; then Yes sends.
 - **Text someone** from the menu, with messages suggested from the conversation.
+- **Use computer** from the menu now offers things to do ("text Andrew", "put the game on") when nobody asked for anything.
 - **Quick phrases** ("Yes", "No", "Thank you", "I need help", ...) that work even with Bonsai off. Set your own with `"phrases"` in `hub/profile.json`.
 - **Stop listening** from the menu: nothing said is kept until the next nod.
 - **Learns your voice.** Replies you pick are saved in `hub/learned.json` (this Mac only) and shown to Bonsai as examples. `LEARN=0` turns it off; delete the file to forget.
@@ -70,6 +74,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 - Chat bubbles for the conversation, including texts sent and received.
 - A progress line during computer tasks: the goal and each step done.
 - A welcome card that explains the four gestures until the first words are spoken.
+- `?scale=1.3` on the page address makes everything bigger.
 - The Yes tile on a send is red and says "this sends it".
 
 ### Listening
@@ -81,7 +86,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 ### Tools
 
 - `./doctor.sh`: checks models on disk, permissions, microphone, camera, sound devices and all three services.
-- `./test.sh`: 52 checks in a few seconds, no model or hardware needed. `./test.sh --all` also runs the real sidecar on a recording, silently.
+- `./test.sh`: over 60 checks in a few seconds, no model or hardware needed. `./test.sh --all` also runs the real sidecar on a recording, silently.
 - `NOD_SILENT=1` or `curl -X POST 'localhost:8790/quiet?on=1'`: rehearse without sound.
 
 ## What I could not check, and you should
