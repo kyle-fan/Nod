@@ -97,8 +97,9 @@ class State:
 
     def view(self):
         v = {k: getattr(self, k) for k in
-             ("mode", "status", "tiles", "index", "history", "partial",
+             ("mode", "status", "tiles", "index", "partial",
               "last_gesture", "gesture_n", "stats", "in_computer", "camera", "paused")}
+        v["history"] = self.history[-30:]   # the screen shows the last few; don't resend a whole evening
         inc = self.incoming
         v["incoming"] = {"from": inc["from"], "text": inc["text"]} if inc else None
         v["settings"] = {"express": config.EXPRESS, "learn": config.LEARN}

@@ -201,9 +201,11 @@ func runSidecar() async throws {
 
     // Tell the hub when a text message arrives, so the next nod can answer it.
     // Off unless NOD_WATCH_MESSAGES=1: it reads the Messages window every few seconds.
-    if env["NOD_WATCH_MESSAGES"] == "1" {
+    // NOD_WATCH_MESSAGES=people only passes on texts from the people in hub/profile.json.
+    if let watch = env["NOD_WATCH_MESSAGES"], watch == "1" || watch == "people" {
         let incomingURL = hubURL.deletingLastPathComponent().appending(path: "incoming")
-        log("watching Messages for new texts")
+        let only = watch == "people" ? Set(profilePeople().map { $0.lowercased() }) : nil
+        log("watching Messages for new texts" + (only.map { " from \($0.sorted().joined(separator: ", "))" } ?? ""))
         Task {
             var seen: Set<String>? = nil     // nil until the first look: what is already there is not news
             while !Task.isCancelled {
@@ -211,6 +213,8 @@ func runSidecar() async throws {
                 let keys = Set(texts.map { "\($0.from)|\($0.text)" })
                 if let old = seen {
                     for t in texts where !old.contains("\(t.from)|\(t.text)") {
+                        if let only, !only.contains(t.from.lowercased()),
+                           !only.contains(t.from.lowercased().split(separator: " ").first.map(String.init) ?? "") { continue }
                         var request = URLRequest(url: incomingURL)
                         request.httpMethod = "POST"
                         request.timeoutInterval = 2
@@ -235,7 +239,7 @@ func runSidecar() async throws {
             "accessibility": Hands.trusted,
             "silent": await voice.isSilent,
             "overlay": await MainActor.run { overlayWindow != nil },
-            "watch_messages": env["NOD_WATCH_MESSAGES"] == "1",
+            "watch_messages": env["NOD_WATCH_MESSAGES"] ?? "0",
             "known_names": NameBook.shared.count,
             "tts_model": ttsModel.rawValue,
         ]
