@@ -45,6 +45,7 @@ class GestureLogic:
         self._tilt_armed = True
         self._last_tilt_active = 0.0
         self._last_jaw_active = 0.0
+        self._frame_at = None
         self._sel_since = self._jaw_since = None
         self._sel_armed = self._jaw_armed = True
         self._hist = deque()        # (t, pitch, |roll|) for the nod window
@@ -67,9 +68,12 @@ class GestureLogic:
 
     def feed(self, now: float, pitch: float, roll: float, sel: float, jaw: float) -> list[str]:
         t, out = self.t, []
-        # median of 3 frames drops single-frame tracking glitches
+        # median of 3 frames drops single-frame tracking glitches. On a slow camera (under about
+        # 16 frames a second) three frames span too much of a nod, so readings are used as they come.
+        slow = self._frame_at is not None and now - self._frame_at > 0.06
+        self._frame_at = now
         self._recent.append((pitch, roll, sel, jaw))
-        if len(self._recent) == 3:
+        if len(self._recent) == 3 and not slow:
             pitch, roll, sel, jaw = (sorted(c)[1] for c in zip(*self._recent))
 
         # 1) calibrate: sit still, neutral face

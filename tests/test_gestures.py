@@ -193,6 +193,19 @@ def test_classic_rules_are_still_available_and_show_the_old_weaknesses():
     assert "nod" in tilt.names(), "the old rules read a dipping tilt as a nod"
 
 
+def test_slow_and_fast_cameras():
+    """The same gestures must read the same at 10 frames a second as at 60."""
+    global FPS
+    old = FPS
+    try:
+        for FPS in (10, 15, 60):
+            assert Trace().nod(depth=12).hold(1).names() == ["nod"], FPS
+            assert Trace().move(0.4, roll=-15, pitch=-20).hold(0.2).move(0.4, roll=0, pitch=0).hold(1.2).names() == ["left"], FPS
+            assert Trace().move(0.2, smile=0.83).hold(0.8).move(0.2, smile=0.0).hold(0.5).names() == ["select"], FPS
+    finally:
+        FPS = old
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in sorted(globals().items()):
