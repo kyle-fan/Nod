@@ -132,6 +132,10 @@ INTENT_SCHEMA = {
 SLOTS = {"reply": 0, "task": 1, "actions": 2, "message": 3, "intent": 0, "textreply": 3}
 
 
+# Choosing a step or classifying a line should be the same every time; wording should vary.
+TEMPERATURE = {"actions": 0.2, "task": 0.0}
+
+
 async def _chat(prompt: tuple[str, str] | str, max_tokens: int = 220, schema: dict | None = None,
                 slot: str | None = None) -> str:
     fixed, changing = prompt if isinstance(prompt, tuple) else ("", prompt)
@@ -139,7 +143,7 @@ async def _chat(prompt: tuple[str, str] | str, max_tokens: int = 220, schema: di
     payload = {
         "model": config.BONSAI_MODEL,
         "messages": messages,
-        "temperature": 0.7,
+        "temperature": TEMPERATURE.get(slot, 0.7),
         "max_tokens": max_tokens,
         # Bonsai 2 reasons by default; turn it off for fast replies.
         "chat_template_kwargs": {"enable_thinking": False},
@@ -411,6 +415,15 @@ async def suggest_actions(history: list[dict], screen: dict, done: list[str] | N
             # The message is written and there is a Send control: sending is always the
             # first tile, whatever order Bonsai put things in.
             steps = [send] + [x for x in steps if x != send]
+        # Who the message is for comes from the friend's own words when they name someone on
+        # screen. Bonsai leans toward the best friend in the profile; a text to the wrong
+        # person is the one mistake that must not happen.
+        named = _named_on_screen(history, elements)
+        if named and need == "Messages":
+            info["goal"] = _goal_for(info["goal"], named["label"])
+            code = f'press {named["id"]}'
+            if f'Pressed "{named["label"]}"' not in pressed:
+                steps = [code] + [x for x in steps if x != code]
         if _looks_finished(info["goal"], done):
             info["finished"] = True
         for step in steps:
@@ -443,6 +456,38 @@ async def suggest_actions(history: list[dict], screen: dict, done: list[str] | N
         ok = False
     ms = int((time.perf_counter() - t0) * 1000)
     return acts[:3], ms, ok, info
+
+
+NOT_A_PERSON = ("send", "post", "submit", "back", "search", "new message", "compose", "call", "play",
+                "reload", "full screen", "done")
+
+
+def _named_on_screen(history: list[dict], elements: list[dict]) -> dict | None:
+    """The one pressable thing on screen whose label the friend said out loud ("tell mom ..."
+    with a "Mom" row showing). None if they named nobody on screen, or more than one."""
+    said = next((t["text"].lower() for t in reversed(history) if t["who"] == "friend"), "")
+    hits = []
+    for e in elements:
+        label = str(e["label"]).strip()
+        low = label.lower()
+        if e["role"] in TYPEABLE or len(low) < 3 or any(low.startswith(w) for w in NOT_A_PERSON):
+            continue
+        first = low.split()[0]
+        if re.search(rf"\b{re.escape(low)}\b", said) or (len(first) > 2 and re.search(rf"\b{re.escape(first)}\b", said)):
+            hits.append(e)
+    exact = [e for e in hits if re.search(rf"\b{re.escape(str(e['label']).lower())}\b", said)]
+    hits = exact or hits
+    return hits[0] if len(hits) == 1 else None
+
+
+def _goal_for(goal: str, person: str) -> str:
+    """Make the goal name the person the friend named."""
+    if person.lower() in goal.lower().split(":")[0]:
+        return goal
+    m = re.match(r"^(text|tell|ask|message|reply to)\s+[^:]+:(.*)$", goal, flags=re.I)
+    if m:
+        return f"{m.group(1)} {person}:{m.group(2)}"
+    return f"text {person}: {goal}"
 
 
 def _looks_finished(goal: str, done: list[str]) -> bool:
