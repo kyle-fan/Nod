@@ -50,6 +50,32 @@ if [ -n "$SC" ]; then
     [ "$(echo "$SC" | jget overlay)" = "True" ] && ok "overlay window is showing" || echo "        (overlay is off: NOD_OVERLAY=1 ./start.sh, or curl -X POST 'localhost:8790/overlay?on=1')"
 else bad "sidecar is not running on :8790 (./start.sh)"; fi
 
+# Messages: are the people in the profile reachable? (read-only: nothing is opened or typed)
+if [ -n "$SC" ] && [ "$(echo "$SC" | jget accessibility)" = "True" ] && pgrep -x Messages >/dev/null; then
+    curl -s -m 8 "http://127.0.0.1:8790/screen?app=Messages" | "$PY" -c "
+import json, sys
+try:
+    screen = json.load(sys.stdin)
+    people = list(json.load(open('$ROOT/hub/profile.json')).get('people', {}))
+except Exception as e:
+    print('  \033[33mCHECK\033[0m could not read Messages:', e); sys.exit()
+names = [e['label'] for e in screen.get('elements', []) if e['role'] != 'textfield' and e['label'] not in ('Send', 'Back to conversations')]
+box = [e['label'] for e in screen.get('elements', []) if e['role'] == 'textfield']
+if box:
+    print('  \033[32mOK\033[0m    Messages: a chat is open (' + box[0].split(':')[0] + ')')
+elif names:
+    print('  \033[32mOK\033[0m    Messages: %d chats visible (%s%s)' % (len(names), ', '.join(names[:5]), ', ...' if len(names) > 5 else ''))
+    for p in people:
+        hit = [n for n in names if n.lower() == p.lower() or n.lower().split()[0] == p.lower().split()[0]]
+        if hit: print('  \033[32mOK\033[0m    "%s" from the profile has a chat (%s)' % (p, hit[0]))
+        else: print('  \033[33mCHECK\033[0m no chat called "%s" among the first 12: "tell %s ..." will say it can\'t see the chat. Rename a contact or bring that chat to the top' % (p, p))
+else:
+    print('  \033[33mCHECK\033[0m Messages is open but no chats were found: is its window on screen?')
+"
+elif [ -n "$SC" ] && [ "$(echo "$SC" | jget accessibility)" = "True" ]; then
+    warn "Messages is not open: open it for the texting part of the demo"
+fi
+
 HB=$(curl -s -m 5 http://127.0.0.1:8000/status)
 if [ -n "$HB" ]; then
     ok "hub answers on :8000"

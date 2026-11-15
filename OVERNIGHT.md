@@ -91,7 +91,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 ### Tools
 
 - `./doctor.sh`: checks models on disk, permissions, microphone, camera, sound devices and all three services.
-- `./test.sh`: about 75 checks in a few seconds, no model or hardware needed.
+- `./test.sh`: about 70 checks in a few seconds, no model or hardware needed.
 - `./rehearse.sh` starts the pretend-Mac rehearsal in one command, and `tools/autoplay.py` plays the whole demo by itself on it. `./test.sh --all` also runs the real sidecar on a recording, silently.
 - `NOD_SILENT=1` or `curl -X POST 'localhost:8790/quiet?on=1'`: rehearse without sound.
 
