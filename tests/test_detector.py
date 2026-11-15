@@ -60,7 +60,59 @@ def test_flipped_camera_pitch():
     assert events == ["nod", "select"], events
 
 
+def test_rules_can_be_switched_while_the_camera_runs():
+    """The dev bar's "Classic gestures" checkbox: the camera thread swaps rule sets on the next
+    frame, relearns neutral, and gestures keep arriving."""
+    import hub.config as config
+    import hub.gestures as gestures
+    t, seq = 100.0, []
+    def add(seconds, pitch=0.0):
+        nonlocal t
+        for _ in range(int(seconds * 30)):
+            t += 1 / 30
+            seq.append((t, pitch, 1.0, 0.0, 0.0, 0.0, 0.0))
+    def nod():
+        for p in (-5, -12, -20, -20, -12, -4, 3, 5, 2, 0):
+            add(0.07, pitch=p)
+    add(2.0); nod(); add(1.0)
+    switch_at = len(seq)
+    add(3.0); nod(); add(1.0)
+
+    events, made, calibrating_after_switch = [], [], []
+    old_signals, old_time, old_make, old_classic = face.signals, face.time.time, gestures.make_logic, config.CLASSIC_GESTURES
+    clock = {"now": 100.0}
+
+    def fake_signals(camera_index=0, stop=None, misses=False):
+        for i, f in enumerate(seq):
+            clock["now"] = f[0]
+            if i == switch_at:
+                config.CLASSIC_GESTURES = True
+            if i == switch_at + 2:
+                calibrating_after_switch.append(det.calibrating)
+            yield f
+
+    def recording_make(tuning=None, classic=None):
+        logic = old_make(tuning, classic)
+        made.append(type(logic).__name__)
+        return logic
+
+    face.signals, gestures.make_logic = fake_signals, recording_make
+    face.time.time = lambda: clock["now"]
+    config.CLASSIC_GESTURES = False
+    try:
+        det = face.GestureDetector(on_event=events.append)
+        det._stop.set()
+        det.run()
+    finally:
+        face.signals, face.time.time, gestures.make_logic = old_signals, old_time, old_make
+        config.CLASSIC_GESTURES = old_classic
+    assert made == ["GestureLogic", "ClassicLogic"], made
+    assert calibrating_after_switch == [True]      # the new rules learn neutral again
+    assert events == ["nod", "nod"], events        # one nod under each set of rules
+
+
 if __name__ == "__main__":
     test_nod_and_smile_reach_the_hub()
     test_flipped_camera_pitch()
+    test_rules_can_be_switched_while_the_camera_runs()
     print("ok   detector")

@@ -44,6 +44,7 @@ http://127.0.0.1:8000/debug shows the live gesture readings against their thresh
 | Problem | Fix |
 |---|---|
 | A gesture doesn't register | Use the keyboard in the Chrome tab, or `curl -X POST localhost:8000/recalibrate` |
+| Gestures misfire all the time | Tick **Classic gestures** in the Chrome tab's dev bar (last night's rules), sit neutral for two seconds |
 | Stuck on a screen | Open mouth (back), or the Reset button in the Chrome tab |
 | It captions people at other tables | Restart with `NOD_MIN_DB=-35` (the `/debug` page shows the level to pick), or use an external microphone close to the friend |
 | It doesn't hear the friend | `curl -s localhost:8790/ears` shows whether sound is arriving; check the sound input |

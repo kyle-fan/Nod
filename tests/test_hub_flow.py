@@ -484,8 +484,9 @@ async def test_express_texting_is_three_picks():
 async def test_settings_can_be_switched_while_running():
     await fresh()
     try:
-        assert (await main.set_settings({"express": True, "learn": False})) == {"express": True, "learn": False}
-        assert S.view()["settings"] == {"express": True, "learn": False}
+        want = {"express": True, "learn": False, "classic_gestures": False}
+        assert (await main.set_settings({"express": True, "learn": False})) == want
+        assert S.view()["settings"] == want
         await friend("can you tell Andrew to come back")
         await g("nod", "select")
         assert S.status == "Text Andrew"

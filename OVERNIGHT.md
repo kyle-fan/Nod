@@ -26,7 +26,7 @@ NOD_OVERLAY=1 USE_CAMERA=1 ./start.sh       # 2. sit neutral while it starts
 
 | Step | What to do | What should happen | If it doesn't |
 |---|---|---|---|
-| 4. Gestures | Open http://127.0.0.1:8000/debug in Chrome. Nod, tilt each way, smile, open your mouth. | Each bar passes its red line and "enough" lights up; the log below shows nod, left, right, select, cancel. | Tell me which gesture and what the "last 4 s" numbers say. `NOD_GESTURES=classic ./start.sh` brings back last night's rules. |
+| 4. Gestures | Open http://127.0.0.1:8000/debug in Chrome. Nod, tilt each way, smile, open your mouth. | Each bar passes its red line and "enough" lights up; the log below shows nod, left, right, select, cancel. | Tell me which gesture and what the "last 4 s" numbers say. Tick **Classic gestures** in the Chrome tab's dev bar to switch to last night's rules on the spot (sit neutral for two seconds after), or start with `NOD_GESTURES=classic ./start.sh`. |
 | 5. Talking | Say something, nod, tilt, smile. | Caption in the overlay, three replies appear one by one, the Mac speaks, and its own voice does not come back as a caption. | `curl -s localhost:8790/ears` shows whether sound is arriving. |
 | 6. Texting | Messages open. Say "can you tell Caden Ruan to come back". Nod, then smile on the first tile each time; at the question, tilt to Yes and smile. | Tiles go: agree, Caden Ruan, three wordings, Send, `Send "..." to Caden Ruan?`. The text appears in Messages. | Tell me which tile was wrong; `/debug` has the log. |
 | 7. A text arrives | In the Chrome tab's dev box type `/text Caden Ruan: where are you`, then nod. | "Caden Ruan texted you. Nod to answer", three answers, one pick types it, Yes sends. | Same. |
@@ -71,7 +71,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 - The dip that comes with a left tilt (20 degrees for you) is no longer read as a nod. Opening your mouth, which also tips the head, isn't either.
 - A smile in the first 0.6 s after new tiles appear is ignored, so smiling at your friend as you nod doesn't pick the first tile.
 - They behave the same on a slow camera (10 frames a second) as a fast one, and with tracking jitter added.
-- If the new rules feel worse on your face, `NOD_GESTURES=classic ./start.sh` brings back last night's.
+- If the new rules feel worse on your face, the **Classic gestures** checkbox in the Chrome tab's dev bar switches to last night's rules without a restart (it relearns your neutral face, about two seconds). `NOD_GESTURES=classic ./start.sh` starts that way.
 - `python -m hub.face --record trace.json` saves 40 s of your real gestures; `--replay trace.json` shows what the new and the old rules fire on it. If something misfires, record it and send me the file.
 - The screen says "Learning your neutral face", "Can't see your face", or "Camera not available" when that is the problem.
 

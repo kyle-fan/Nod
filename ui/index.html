@@ -216,6 +216,7 @@
   <input id="say" placeholder="Dev: type what the friend said, press Enter. Or: /text Andrew: where are you   (keys: N nod · 1-5 pick a tile · ← → move · Space pick · Esc back · C recalibrate camera · D hide this bar)">
   <label class="opt" title="Texting someone in the profile takes 3 picks instead of 5"><input type="checkbox" id="optExpress"> Express texts</label>
   <label class="opt" title="Remember the replies he picks and use them as examples of his voice"><input type="checkbox" id="optLearn"> Learn replies</label>
+  <label class="opt" title="Last night's gesture rules, if the new ones misfire on your face. Sit neutral for two seconds after switching"><input type="checkbox" id="optClassic"> Classic gestures</label>
   <a class="opt" href="/debug" target="_blank" title="Live gesture readings, microphone level, timings and a log">Under the hood</a>
   <button id="reset">Reset</button>
   <button id="hide">Hide (D)</button>
@@ -292,7 +293,7 @@ function render(s) {
     else $("caption").classList.remove("show");
   }
 
-  if (s.settings) { $("optExpress").checked = s.settings.express; $("optLearn").checked = s.settings.learn; }
+  if (s.settings) { $("optExpress").checked = s.settings.express; $("optLearn").checked = s.settings.learn; $("optClassic").checked = !!s.settings.classic_gestures; }
 
   // alerts: things that stop it working, said plainly
   const cam = s.camera || {}, al = [];
@@ -403,6 +404,7 @@ $("tiles").addEventListener("click", e => {
 });
 $("optExpress").onchange = e => send({type: "settings", express: e.target.checked});
 $("optLearn").onchange = e => send({type: "settings", learn: e.target.checked});
+$("optClassic").onchange = e => send({type: "settings", classic_gestures: e.target.checked});
 $("reset").onclick = () => send({type: "reset"});
 $("hide").onclick = () => $("dev").classList.add("hidden");
 connect();

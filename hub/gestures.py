@@ -211,6 +211,8 @@ class ClassicLogic(GestureLogic):
         return out
 
 
-def make_logic(tuning: Tuning | None = None) -> GestureLogic:
-    import os
-    return (ClassicLogic if os.getenv("NOD_GESTURES", "").lower() == "classic" else GestureLogic)(tuning)
+def make_logic(tuning: Tuning | None = None, classic: bool | None = None) -> GestureLogic:
+    if classic is None:
+        import os
+        classic = os.getenv("NOD_GESTURES", "").lower() == "classic"
+    return (ClassicLogic if classic else GestureLogic)(tuning)

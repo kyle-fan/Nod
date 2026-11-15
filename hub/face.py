@@ -91,8 +91,10 @@ class GestureDetector:
 
     def run(self):
         """The gesture rules live in hub/gestures.py (testable without a camera)."""
+        from . import config
         from .gestures import make_logic
-        logic = make_logic(self.tuning())   # NOD_GESTURES=classic switches to the older rules
+        classic = config.CLASSIC_GESTURES    # NOD_GESTURES=classic, or the dev bar's checkbox
+        logic = make_logic(self.tuning(), classic)
         was_calibrating = True
         last_face = time.time()
         last_frame_t = 0.0
@@ -107,6 +109,10 @@ class GestureDetector:
                 roll = -roll
             if FLIP_PITCH:
                 pitch = -pitch
+            if config.CLASSIC_GESTURES != classic:   # switched while running: start over with the other rules
+                classic = config.CLASSIC_GESTURES
+                logic = make_logic(self.tuning(), classic)
+                print(f"[face] now using the {'classic' if classic else 'current'} gesture rules: sit neutral...")
             if self._recal.is_set():
                 self._recal.clear()
                 logic.recalibrate()

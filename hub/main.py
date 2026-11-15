@@ -106,7 +106,7 @@ class State:
         v["history"] = self.history[-30:]   # the screen shows the last few; don't resend a whole evening
         inc = self.incoming
         v["incoming"] = {"from": inc["from"], "text": inc["text"]} if inc else None
-        v["settings"] = {"express": config.EXPRESS, "learn": config.LEARN}
+        v["settings"] = settings_view()
         # what the computer task is and how far it has got, for the progress line on screen
         v["task"] = {"goal": (self.goal or {}).get("goal", ""), "done": self.done[-4:]} if self.in_computer else None
         return v
@@ -852,7 +852,7 @@ async def ws_endpoint(ws: WebSocket):
             elif msg.get("type") == "heard":   # dev box: type what the friend said
                 await heard(Heard(text=msg.get("text", ""), final=True))
             elif msg.get("type") == "settings":
-                await set_settings({k: msg[k] for k in ("express", "learn") if k in msg})
+                await set_settings({k: msg[k] for k in ("express", "learn", "classic_gestures") if k in msg})
             elif msg.get("type") == "pick":
                 asyncio.create_task(on_pick(int(msg.get("index", -1))))
             elif msg.get("type") == "incoming":   # dev box: "/text Andrew: where are you"
@@ -871,7 +871,7 @@ async def ws_endpoint(ws: WebSocket):
 
 
 def settings_view():
-    return {"express": config.EXPRESS, "learn": config.LEARN}
+    return {"express": config.EXPRESS, "learn": config.LEARN, "classic_gestures": config.CLASSIC_GESTURES}
 
 
 @app.get("/settings")
@@ -881,11 +881,15 @@ async def get_settings():
 
 @app.post("/settings")
 async def set_settings(body: dict):
-    """Switch options while running (the dev bar's checkboxes): {"express": true, "learn": false}."""
+    """Switch options while running (the dev bar's checkboxes):
+    {"express": true, "learn": false, "classic_gestures": false}."""
     if "express" in body:
         config.EXPRESS = bool(body["express"])
     if "learn" in body:
         config.LEARN = bool(body["learn"])
+    if "classic_gestures" in body and bool(body["classic_gestures"]) != config.CLASSIC_GESTURES:
+        config.CLASSIC_GESTURES = bool(body["classic_gestures"])   # the camera thread picks this up on its next frame
+        note("settings", "classic gesture rules" if config.CLASSIC_GESTURES else "current gesture rules")
     await broadcast()
     return settings_view()
 
@@ -926,7 +930,7 @@ async def debug_json():
     if det:
         out["gestures"] = {
             "reading": det.reading, "fps": round(det.fps, 1), "select_signal": face.SELECT_SIGNAL,
-            "rules": __import__("os").getenv("NOD_GESTURES", "current"),
+            "rules": "classic" if config.CLASSIC_GESTURES else "current",
             "thresholds": {"tilt": face.TILT_DEG, "nod": face.NOD_DEG, "select": face.SELECT_T, "jaw": face.JAW_T}}
     if not config.MOCK_SIDECAR:
         try:

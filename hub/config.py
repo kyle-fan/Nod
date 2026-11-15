@@ -37,3 +37,7 @@ LEARNED_SHOWN = int(os.getenv("LEARNED_SHOWN", "6"))
 # tiles. After he agrees he picks a wording, the Mac opens the chat and types it, and he
 # confirms: 3 picks instead of 5. Off by default so every step stays visible.
 EXPRESS = os.getenv("EXPRESS", "0") == "1"
+
+# NOD_GESTURES=classic: the older gesture rules (neutral learned once, no drift following).
+# Can also be switched while running, with the dev bar's checkbox or POST /settings.
+CLASSIC_GESTURES = os.getenv("NOD_GESTURES", "").lower() == "classic"

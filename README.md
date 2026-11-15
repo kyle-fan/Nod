@@ -68,7 +68,7 @@ Useful switches (all optional, set before `./start.sh`):
 | `NOD_TTS_SPEAKER`, `NOD_TTS_STYLE` | Voice and how it speaks (see `sidecar/README.md`) |
 | `LEARN=0` | Don't remember picked replies |
 | `EXPRESS=1` | Texting someone in the profile takes 3 picks instead of 5: agree, pick a wording, confirm |
-| `NOD_GESTURES=classic` | The older gesture rules, if the new ones don't suit your face |
+| `NOD_GESTURES=classic` | The older gesture rules, if the new ones don't suit your face. The dev bar's **Classic gestures** checkbox switches while running |
 
 First run needs Wi-Fi once to download the speech and face models. After that everything loads from disk.
 
