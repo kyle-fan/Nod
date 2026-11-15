@@ -36,12 +36,13 @@ Then, with Messages open:
 | First reply tile after a nod with nothing prepared | about 2 s for all three | first at 0.6 s, they appear one by one |
 | Confirming a send | wait for the spoken question to finish | answer while it is still speaking |
 
-How: prompts are split into a fixed part that llama-server caches and a changing part; computer steps are answered with short codes; the goal is decided once per task; the first step is prepared while "yeah one sec" is being spoken.
+How: prompts are split into a fixed part that llama-server caches and a changing part; computer steps are answered with short codes; the goal is decided once per task; the first step is worked out as soon as the friend asks, before you have even agreed.
 
 ### More reliable
 
 - **99 of 99** practice chains ended correctly (right person, right message, or right page), always picking the first tile, over seven runs with the real model. Before the fixes below it was 16 of 18.
-- On a chat list the size of yours (12 names) and a busy sports page (25 links), the first tile was right in all 16 cases I tried.
+- On chat lists the size of yours (12 and 30 names) and a busy sports page (25 links), the first tile was right in all 21 cases I tried. The sidecar now lists up to 30 chats, so someone further down can be found.
+- 600 random gestures, friend lines and incoming texts thrown at it in three runs: no crash, never stuck, and nothing was sent without a Yes.
 - **Wrong recipient fixed.** "Let mom know I'll call her tonight" used to open Andrew's chat, because the profile calls him the best friend. The person the friend names is now always the recipient, and the confirmation says who it goes to: `Send "i'll call you tonight" to Mom?`
 - **No chat, no guess.** If the person has no chat on screen, the only tile is Done ("Can't see a chat with Coach in Messages"). Last night it opened someone else's chat. And if another person's chat is open, nothing can be typed or sent there: "Back to conversations" comes first.
 - **Never stuck.** A sidecar restart mid-speech (what froze it on "Speaking" last night), a Bonsai failure, or any error now returns to listening with a plain message.
@@ -56,6 +57,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 - A nod is now a dip and return relative to where your head just was, and "neutral" slowly follows you, so nods keep working after you slump or lean. Under the old rules a slump of about 10 degrees lost them.
 - The dip that comes with a left tilt (20 degrees for you) is no longer read as a nod. Opening your mouth, which also tips the head, isn't either.
 - A smile in the first 0.6 s after new tiles appear is ignored, so smiling at your friend as you nod doesn't pick the first tile.
+- They behave the same on a slow camera (10 frames a second) as a fast one, and with tracking jitter added.
 - If the new rules feel worse on your face, `NOD_GESTURES=classic ./start.sh` brings back last night's.
 - `python -m hub.face --record trace.json` saves 40 s of your real gestures; `--replay trace.json` shows what the new and the old rules fire on it. If something misfires, record it and send me the file.
 - The screen says "Learning your neutral face", "Can't see your face", or "Camera not available" when that is the problem.
@@ -69,12 +71,11 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 - **Quick phrases** ("Yes", "No", "Thank you", "I need help", ...) that work even with Bonsai off. Set your own with `"phrases"` in `hub/profile.json`.
 - **Stop listening** from the menu: nothing said is kept until the next nod.
 - **Learns your voice.** Replies you pick are saved in `hub/learned.json` (this Mac only) and shown to Bonsai as examples. `LEARN=0` turns it off; delete the file to forget.
+- **A game page that works offline.** `http://127.0.0.1:8000/demo` is a stand-in sports site served by the hub: a "Yankees vs Red Sox - Watch Live" link and a player with Play. Open it in Safari before the demo and "put the game on" can be shown with Wi-Fi off, which no real site can.
 - **Reword a typed message**: "Write a different message" gives three more.
 - If the friend keeps talking after you nod and you haven't moved yet, the replies are rewritten for what they just said.
 - Number keys `1`-`5` and mouse clicks pick tiles, for a helper or for rehearsing.
 - The dev bar in the Chrome tab has two checkboxes, **Express texts** and **Learn replies**, so you can switch them without restarting.
-
-- **A game page that works offline.** `http://127.0.0.1:8000/demo` is a stand-in sports site served by the hub: a "Yankees vs Red Sox - Watch Live" link and a player with Play. Open it in Safari before the demo and "put the game on" can be shown with Wi-Fi off, which no real site can.
 
 ### Screen
 
@@ -93,7 +94,8 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 
 ### Tools
 
-- `./doctor.sh`: checks models on disk, permissions, microphone, camera, sound devices and all three services.
+- `./doctor.sh`: checks models on disk, permissions, microphone, camera, sound devices and all three services. With Messages open it also says whether the people in the profile (Andrew) have a chat it can see, which is the thing most likely to trip the demo line.
+- `./start.sh` now starts the hub before the sidecar. Last night the hub turning the camera on stopped the microphone that was already running; this order avoids it, and the sidecar restarts the microphone by itself if it ever goes quiet.
 - `./test.sh`: about 70 checks in a few seconds, no model or hardware needed.
 - `./rehearse.sh` starts the pretend-Mac rehearsal in one command, and `tools/autoplay.py` plays the whole demo by itself on it. `./test.sh --all` also runs the real sidecar on a recording, silently.
 - `NOD_SILENT=1` or `curl -X POST 'localhost:8790/quiet?on=1'`: rehearse without sound.
@@ -102,12 +104,13 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 
 I can't use the camera, grant Accessibility to my own processes, or play sound, so these are built but have not run on real hardware:
 
-1. **The new gesture rules on your face.** They pass 16 tests built from your `--measure` numbers, but that is not you. Try nods after leaning back, and a left tilt. If a gesture is worse than last night, tell me which.
+1. **The new gesture rules on your face.** They pass 25 scenarios built from your `--measure` numbers, with jitter and at several frame rates, but that is not you. Try nods after leaning back, and a left tilt. If a gesture is worse than last night, tell me which.
 2. **Messages on the real Mac after the hub changes.** The sidecar's Messages code is unchanged from what worked last night; the hub that drives it is new. The practice Mac passes every time.
 3. **Incoming texts from real Messages** (`NOD_WATCH_MESSAGES=1`). The hub side is tested; how the sidecar spots a new text (an "Unread" row, or a new bubble in the open chat) is from what I saw in your Messages last night and has never run. It is off unless you turn it on.
 4. **Web pages.** `/screen` now lists a page's own links before the browser's toolbar buttons, and the stand-in game page was built for it. Neither has been read through the real Safari yet, so try "put the Yankees game on" with that page open before relying on it.
-5. **The overlay's position above the Dock**, from last night, and how the new captions look in it.
-6. **Speech hints**: tested on recordings with added noise, not on live voices in a room.
+5. **How the overlay looks.** Its window now reports itself sitting just above the Dock and the page loads in it, but I can't see the screen, so the look of it and of the new captions is yours to judge.
+6. **Speech hints and the longer mid-sentence pause**: tested on recordings with added noise, not on live voices in a room.
+7. **The voice.** I can't listen, but I had Whisper transcribe six generated replies and it got every word, so it is at least intelligible.
 
 ## For Kyle
 
