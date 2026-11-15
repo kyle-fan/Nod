@@ -127,7 +127,7 @@ What keeps it safe:
 ## Tests
 
 ```bash
-./test.sh        # about 75 checks in a few seconds: no model, camera, microphone or network needed
+./test.sh        # about 80 checks in a few seconds: no model, camera, microphone or network needed
 ./test.sh --all  # also runs the real sidecar on a recording, silently (about a minute)
 python tests/run_all.py   # the same fast checks on any OS (Windows too)
 ```

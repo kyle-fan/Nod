@@ -98,6 +98,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 - A welcome card that explains the four gestures until the first words are spoken.
 - `?scale=1.3` on the page address makes everything bigger.
 - The Yes tile on a send is red and says "this sends it".
+- "Sent" and "Done" go back to "Listening" by themselves after five seconds, so the screen never sits on an old result.
 
 ### Listening
 
@@ -111,7 +112,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 - `./start.sh` now ends by running the health check, so a missing permission is the first thing you see.
 - `./start.sh` now starts the hub before the sidecar. Last night the hub turning the camera on stopped the microphone that was already running; this order avoids it, and the sidecar restarts the microphone by itself if it ever goes quiet.
 - **http://127.0.0.1:8000/debug**: a live "under the hood" page. It shows what the camera reads for nod, tilt, smile and mouth against each threshold (so you can see how far your nod actually dips), the microphone level against the speech threshold, how long each Bonsai call took, and a log of every gesture, sentence heard and action. Keep it open while tuning.
-- `./test.sh`: about 75 checks in a few seconds, no model or hardware needed.
+- `./test.sh`: about 80 checks in a few seconds, no model or hardware needed.
 - `./rehearse.sh` starts the pretend-Mac rehearsal in one command, and `tools/autoplay.py` plays the whole demo by itself on it. `./test.sh --all` also runs the real sidecar on a recording, silently.
 - `NOD_SILENT=1` or `curl -X POST 'localhost:8790/quiet?on=1'`: rehearse without sound.
 
