@@ -42,18 +42,7 @@ else
     wait_for Bonsai http://127.0.0.1:8080/health 120 "$RUN/bonsai.log" || exit 1
 fi
 
-echo "2/3 Sidecar (:8790)"
-if up http://127.0.0.1:8790/health; then
-    echo "  already running"
-else
-    (cd "$ROOT/sidecar" && swift build -c release 2>&1 | grep -E "error|Build complete" ) || { echo "  sidecar build failed"; exit 1; }
-    (cd "$ROOT/sidecar" || exit 1; nohup .build/release/NodSidecar > "$RUN/sidecar.log" 2>&1 < /dev/null & echo $! > "$RUN/sidecar.pid")
-    # Loading the speech models usually takes 10 s, but can take a few minutes after a reboot.
-    wait_for sidecar http://127.0.0.1:8790/health 400 "$RUN/sidecar.log" || exit 1
-    grep -E "WARNING|MIC ERROR" "$RUN/sidecar.log" | sed 's/^/  /'
-fi
-
-echo "3/3 Hub (:8000)"
+echo "2/3 Hub (:8000)"
 if up http://127.0.0.1:8000/; then
     echo "  already running"
 else
@@ -63,6 +52,19 @@ else
     fi
     (cd "$ROOT" || exit 1; USE_CAMERA="$USE_CAMERA" MOCK_SIDECAR=0 nohup .venv/bin/uvicorn hub.main:app --port 8000 > "$RUN/hub.log" 2>&1 < /dev/null & echo $! > "$RUN/hub.pid")
     wait_for hub http://127.0.0.1:8000/ 30 "$RUN/hub.log" || exit 1
+fi
+
+# The hub starts before the sidecar on purpose: when the hub turns the camera on, macOS
+# reshuffles its audio devices, which stops a microphone stream that was already running.
+echo "3/3 Sidecar (:8790)"
+if up http://127.0.0.1:8790/health; then
+    echo "  already running"
+else
+    (cd "$ROOT/sidecar" && swift build -c release 2>&1 | grep -E "error|Build complete" ) || { echo "  sidecar build failed"; exit 1; }
+    (cd "$ROOT/sidecar" || exit 1; nohup .build/release/NodSidecar > "$RUN/sidecar.log" 2>&1 < /dev/null & echo $! > "$RUN/sidecar.pid")
+    # Loading the speech models usually takes 10 s, but can take a few minutes after a reboot.
+    wait_for sidecar http://127.0.0.1:8790/health 400 "$RUN/sidecar.log" || exit 1
+    grep -E "WARNING|MIC ERROR" "$RUN/sidecar.log" | sed 's/^/  /'
 fi
 
 echo

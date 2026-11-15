@@ -84,5 +84,16 @@
       ]
     }
   ],
+  "phrases": [
+    "Yes",
+    "No",
+    "Thank you",
+    "I need help",
+    "Give me a minute",
+    "Can you say that again?",
+    "I'm okay",
+    "Not right now",
+    "Please stop"
+  ],
   "voice": "warm, slightly raspy young male voice, calm pace"
 }
