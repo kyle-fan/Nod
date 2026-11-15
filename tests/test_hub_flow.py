@@ -695,7 +695,7 @@ async def test_quick_phrases_need_no_model():
     await fresh()
     CALLS.clear()
     await g("cancel")
-    assert labels() == ["Talk", "Quick phrases", "Text someone", "More", "Back"]
+    assert labels() == ["Talk", "Quick phrases", "Text someone", "More", "Search", "Back"]
     await g("right", "select")
     assert S.status == "Quick phrases" and labels()[:3] == ["Yes", "No", "Thank you"]
     await g("right", "right", "right", "select")        # More phrases

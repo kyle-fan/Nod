@@ -1,0 +1,14 @@
+{name} can't use a keyboard. He opened "Search" himself: suggest what he might want to look up on the web right now.
+
+About {name}:
+{profile}
+
+Rules for the 3 searches:
+- Each one is what you'd type into a search box: 2 to 5 plain words, no question mark, no quotes.
+- If the conversation is about something that can be looked up (a game, a place to eat, a time, the weather, a fact), the first search is about that.
+- The others come from his interests above. Make the 3 clearly different.
+=====
+What has been said out loud recently (may be nothing):
+{history}
+
+Return JSON: {{"replies": ["...", "...", "..."]}}

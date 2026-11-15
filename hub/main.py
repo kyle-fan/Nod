@@ -23,6 +23,7 @@ HOME_TILES = [
     {"label": "Quick phrases", "kind": "home", "value": "phrases"},
     {"label": "Text someone", "kind": "home", "value": "text"},
     {"label": "More", "kind": "home", "value": "more"},
+    {"label": "Search", "kind": "home", "value": "search"},
     {"label": "Back", "kind": "home", "value": "back"},
 ]
 HOME_MORE_TILES = [
@@ -325,6 +326,17 @@ async def show_tasks():
     tiles.append({"label": "Just show the screen", "kind": "home", "value": "screen"})
     tiles.append({"label": "Back", "kind": "home", "value": "back"})
     set_tiles(tiles, status="Do what?")
+
+
+async def show_searches():
+    """The menu's Search tile: three things to look up, from the conversation and his interests."""
+    S.mode, S.status, S.tiles = "thinking", "Thinking...", []
+    await broadcast()
+    queries, ms, ok = await brain.suggest_searches(S.history)
+    S.stats.update(latency_ms=ms, bonsai_ok=ok)
+    tiles = [{"label": q, "kind": "search", "value": q} for q in queries]
+    tiles.append({"label": "Back", "kind": "home", "value": "back"})
+    set_tiles(tiles, status="Search for what?")
 
 
 # ---------- texting someone unprompted ----------
@@ -684,6 +696,8 @@ async def pick(tile):
             go_listen()
         elif v == "text":
             show_people()
+        elif v == "search":
+            await show_searches()
         elif v == "computer":
             await show_tasks()
         elif v == "screen":
@@ -700,6 +714,10 @@ async def pick(tile):
             await ask_to_confirm(action)
         else:
             await run_action(action)
+    elif k == "search":
+        start_task()                     # opens the search in Safari, then the results become tiles
+        S.goal = {"goal": f'look up {tile["value"]}', "app": "Safari"}
+        await run_action(brain.search_action(tile["value"]))
     elif k == "phrases":
         show_phrases(tile["value"])
     elif k == "task":

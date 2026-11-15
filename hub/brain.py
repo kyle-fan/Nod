@@ -503,6 +503,37 @@ async def suggest_tasks(history: list[dict]) -> tuple[list[dict], int, bool]:
     return tasks[:3], ms, ok
 
 
+async def suggest_searches(history: list[dict]) -> tuple[list[str], int, bool]:
+    """3 things he might want to look up, for the menu's Search tile. Returns (queries, ms, ok)."""
+    p = load_profile()
+    prompt = _prompt("search.txt", name=p["name"], profile=_profile_text(p),
+                     history=_history_text(history[-6:], p["name"]))
+    t0 = time.perf_counter()
+    queries, ok = [], True
+    try:
+        out = await _chat(prompt, max_tokens=80, schema=REPLY_SCHEMA, slot="task")
+        for q in _parse_json(out, "replies"):
+            q = str(q).strip(" ?.!\"'")[:60]
+            if q and q.lower() not in [x.lower() for x in queries]:
+                queries.append(q)
+    except Exception as e:
+        print(f"[brain] Bonsai error: {e}")
+        ok = False
+    said = _search_query(friend_said(history)) if history else ""
+    for q in ([said] if LOOKUP.search(friend_said(history) or "") else []) + ["Yankees score", "weather today", "news today"]:
+        if len(queries) >= 3:
+            break
+        if q and q.lower() not in [x.lower() for x in queries]:
+            queries.append(q)                      # Bonsai down or short: still something to pick
+    ms = int((time.perf_counter() - t0) * 1000)
+    return queries[:3], ms, ok
+
+
+def search_action(query: str) -> dict:
+    return {"type": "open_url", "url": SEARCH_URL + urllib.parse.quote_plus(query), "query": query,
+            "label": f"Search: {query}"}
+
+
 async def suggest_intents(history: list[dict], path: list[str], rejected: list[str],
                           seen: list[str]) -> tuple[str, list[str], int, bool]:
     """Clarifying question + 3 directions for the reply. Returns (question, options, ms, ok).
