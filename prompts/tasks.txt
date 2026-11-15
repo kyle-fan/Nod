@@ -1,0 +1,19 @@
+{name} can't use a keyboard or mouse. He opened "Use computer" himself, so nobody asked him to do anything: suggest what he might want to do on his Mac right now.
+
+About {name}:
+{profile}
+
+How {name} uses his computer:
+{habits}
+
+Rules for the 3 suggestions:
+- Each "goal" is a few words in one of these shapes: "text <person>", "put <thing> on", "look up <thing>".
+- Only use people and interests from above or from the conversation. Make the 3 clearly different.
+- "app" is the app that goal needs: texting needs Messages; putting something on or looking something up needs Safari.
+=====
+What has been said out loud recently (may be nothing):
+{history}
+
+Apps he has: {apps}
+
+Return JSON: {{"tasks": [{{"goal": "...", "app": "..."}}, {{"goal": "...", "app": "..."}}, {{"goal": "...", "app": "..."}}]}}

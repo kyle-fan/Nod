@@ -255,6 +255,26 @@ def show_phrases(page=0):
     set_tiles(tiles, status="Quick phrases")
 
 
+# ---------- using the computer when nobody asked ----------
+
+async def show_tasks():
+    """He opened "Use computer" himself. If the friend just asked for something, that is the
+    task. Otherwise offer a few things he might want, so Bonsai isn't left guessing a goal."""
+    last = S.history[-1] if S.history else None
+    if last and last["who"] == "friend" and await brain.computer_task(S.history):
+        start_task()
+        await show_actions()
+        return
+    S.mode, S.status, S.tiles = "thinking", "Thinking...", []
+    await broadcast()
+    tasks, ms, ok = await brain.suggest_tasks(S.history)
+    S.stats.update(latency_ms=ms, bonsai_ok=ok)
+    tiles = [{"label": t["goal"], "kind": "task", "value": t} for t in tasks]
+    tiles.append({"label": "Just show the screen", "kind": "home", "value": "screen"})
+    tiles.append({"label": "Back", "kind": "home", "value": "back"})
+    set_tiles(tiles, status="Do what?")
+
+
 # ---------- texting someone unprompted ----------
 
 def show_people():
@@ -582,6 +602,8 @@ async def pick(tile):
         elif v == "text":
             show_people()
         elif v == "computer":
+            await show_tasks()
+        elif v == "screen":
             start_task()
             await show_actions()
         elif v == "repeat" and S.last_said:
@@ -597,6 +619,17 @@ async def pick(tile):
             await run_action(action)
     elif k == "phrases":
         show_phrases(tile["value"])
+    elif k == "task":
+        goal = tile["value"]
+        person = next((p for p in brain.load_profile().get("people", {})
+                       if goal["goal"].lower() == f"text {p}".lower()), None)
+        if person:                       # "text Andrew": the shorter texting route
+            S.text_to, S.texts_seen = person, []
+            await show_new_texts()
+        else:
+            start_task()
+            S.goal = goal
+            await show_actions()
     elif k == "person":
         S.text_to, S.texts_seen = tile["value"], []
         await show_new_texts()

@@ -32,6 +32,10 @@ async def fake_chat(prompt, max_tokens=220, schema=None, slot=None, on_text=None
 async def fake_answer(prompt, schema, slot):
     fixed, user = prompt if isinstance(prompt, tuple) else ("", prompt)
     CALLS.append(slot)
+    if slot == "task" and "tasks" in (schema or {}).get("properties", {}):
+        return json.dumps({"tasks": [{"goal": "text Andrew", "app": "Messages"},
+                                     {"goal": "put the yankees game on", "app": "Safari"},
+                                     {"goal": "look up the score", "app": "Safari"}]})
     if slot == "task":
         last = user.strip().splitlines()[-4:]
         text = " ".join(last).lower()
@@ -399,6 +403,35 @@ def test_finished_strings():
     assert f('{"replies": ["yeah one sec", "what ti') == ["yeah one sec"]
     assert f('{"replies": ["a", "b \\"quoted\\"", "c"]}') == ["a", 'b "quoted"', "c"]
     assert f('{"repl') == [] and f('{"replies": [') == []
+
+
+async def open_use_computer():
+    await g("cancel", "right", "right", "right", "select")      # Menu -> More
+    await g("select")                                           # Use computer
+
+
+async def test_use_computer_with_no_request_offers_things_to_do():
+    await fresh(app="Safari")
+    await open_use_computer()
+    assert S.status == "Do what?", S.status
+    assert labels() == ["text Andrew", "put the yankees game on", "look up the score", "Just show the screen", "Back"]
+    await g("right", "select")                                  # put the yankees game on
+    assert S.mode == "computer" and labels()[0].startswith("Yankees vs"), labels()
+    assert S.view()["task"]["goal"] == "put the yankees game on"
+
+
+async def test_use_computer_text_task_takes_the_texting_route():
+    await fresh()
+    await open_use_computer()
+    await g("select")                                           # text Andrew
+    assert S.status == "Text Andrew" and labels()[0] == "you around", (S.status, labels())
+
+
+async def test_use_computer_right_after_a_request_does_that_request():
+    await fresh()
+    await friend("can you tell Andrew to come back")
+    await open_use_computer()
+    assert S.mode == "computer" and labels()[0] == "Andrew", (S.status, labels())
 
 
 async def test_quick_phrases_need_no_model():

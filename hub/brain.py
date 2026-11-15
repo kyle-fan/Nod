@@ -339,6 +339,34 @@ async def suggest_new_texts(history: list[dict], who: str,
     return (texts + ["hey, you around", "what are you up to", "call me when you can"])[:3], ms, ok
 
 
+async def suggest_tasks(history: list[dict]) -> tuple[list[dict], int, bool]:
+    """3 things he might want to do on his Mac when nobody asked him to: [{"goal", "app"}]."""
+    p = load_profile()
+    apps = p.get("apps", []) or ["Messages", "Safari"]
+    schema = {"type": "object", "required": ["tasks"], "properties": {"tasks": {
+        "type": "array", "minItems": 3, "maxItems": 3,
+        "items": {"type": "object", "required": ["goal", "app"],
+                  "properties": {"goal": {"type": "string", "pattern": r"^[^\"\\]{3,50}$"}, "app": {"enum": apps}}}}}}
+    prompt = _prompt("tasks.txt", name=p["name"], profile=_profile_text(p),
+                     habits="\n".join(f"- {x}" for x in p.get("computer", [])) or "(none)",
+                     history=_history_text(history[-6:], p["name"]), apps=", ".join(apps))
+    t0 = time.perf_counter()
+    tasks, ok = [], True
+    try:
+        out = await _chat(prompt, max_tokens=120, schema=schema, slot="task")
+        seen = set()
+        for t in json.loads(out).get("tasks", []):
+            goal = str(t.get("goal", "")).strip()
+            if goal and goal.lower() not in seen and t.get("app") in apps:
+                seen.add(goal.lower())
+                tasks.append({"goal": goal, "app": t["app"]})
+    except Exception as e:
+        print(f"[brain] Bonsai error: {e}")
+        ok = False
+    ms = int((time.perf_counter() - t0) * 1000)
+    return tasks[:3], ms, ok
+
+
 async def suggest_intents(history: list[dict], path: list[str], rejected: list[str],
                           seen: list[str]) -> tuple[str, list[str], int, bool]:
     """Clarifying question + 3 directions for the reply. Returns (question, options, ms, ok).

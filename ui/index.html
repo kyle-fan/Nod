@@ -339,6 +339,7 @@ function render(s) {
             : t.kind === "textreply" ? '<span class="cap">text back</span>'
             : t.kind === "newtext" ? '<span class="cap">text</span>'
             : t.kind === "person" ? '<span class="cap">text</span>'
+            : t.kind === "task" ? '<span class="cap">do</span>'
             : t.kind === "confirm" && t.value ? '<span class="cap">this sends it</span>'
             : a ? `<span class="cap">${{press: "press", type: "type", open_app: "open"}[a.type] || ""}</span>` : "";
           const text = a && a.type === "type" ? `“${esc(a.text)}”` : a && a.type === "open_app" ? esc(a.name) : esc(t.label);
