@@ -41,6 +41,12 @@ context  ->  Bonsai predicts options  ->  tiles on screen  ->  head gesture pick
 - Send partial results with `"final": false` (UI shows them live) and one `"final": true` per finished sentence.
 - **Mute rule:** the sidecar must NOT send anything while TTSKit is speaking, plus 400 ms after it finishes. Otherwise the app hears its own voice as the friend.
 
+`POST http://127.0.0.1:8000/incoming`  (optional; sidecar sends it when started with `NOD_WATCH_MESSAGES=1`)
+```json
+{ "from": "Andrew", "text": "where are you" }
+```
+- A text message arrived. The hub shows it, and the next nod offers 3 answers to it instead of talk replies (see Hub states). The same message reported twice counts once.
+
 ## Hub -> Sidecar
 
 `POST /speak` `{ "text": "Thai, but no meat for me" }`
@@ -75,7 +81,23 @@ context  ->  Bonsai predicts options  ->  tiles on screen  ->  head gesture pick
 - `open_app` names come from `hub/profile.json` `apps` (currently Messages and Safari). Bring the app to the front; `/screen` should describe it on the next call.
 - The hub calls `/screen` again about 0.4 s after every successful `/act`, so the app should have updated by then.
 
-## Overlay window (page built; native window proposed, sidecar side)
+Sidecar extras (none are needed by the hub; all are for running and checking it):
+
+| Endpoint | What it does |
+|---|---|
+| `GET /health` | `{"ok": true}` once the models are loaded |
+| `GET /status` | accessibility permission, microphone state, overlay, silent mode (used by `./doctor.sh`) |
+| `GET /ears` | is sound arriving, how loud, noise floor |
+| `POST /quiet?on=1` | rehearsal: speech is generated and timed but not played (`on=0` to undo; `NOD_SILENT=1` at start) |
+| `POST /overlay?on=1` | show or hide the floating tile window while running |
+| `GET /screen?app=Messages` | read a named running app instead of the frontmost one |
+| `GET /axdump?app=Messages` | raw accessibility tree of an app, for fitting `/screen` to a new app |
+| `GET /names?text=...` | what a transcript becomes after name correction |
+| `POST /restart` | relaunch a rebuilt sidecar, keeping the terminal's permissions (dev only) |
+
+How Messages is read: two views with the same shapes as `FakeMac` in `hub/sidecar.py`. List view is one button per chat labeled with the name, and no message box. For 90 s after a name is pressed it is the chat view: `Back to conversations`, the box `Message <name>` with its `value`, and `Send` (which presses Return, since Messages has no Send control). If the other person wrote last, the box label continues `: your answer to <name>, who asked you '<their text>'`, and the hub passes that label to the message prompt.
+
+## Overlay window (built: `NOD_OVERLAY=1`)
 
 Blink should float over whatever app is in use instead of living in a browser tab.
 
@@ -95,13 +117,25 @@ Blink should float over whatever app is in use instead of living in a browser ta
 
 Keyboard fallback in the UI (for dev and as a demo safety net): `N` nod, `←` `→` move, `Space` select, `Esc` cancel. `C` recalibrates the camera's neutral pose (sit still for 1.5 s); `POST /recalibrate` on the hub does the same without a focused browser.
 
-Holding a tilt keeps moving the highlight, one tile every 0.9 s.
+Holding a tilt keeps moving the highlight, one tile every 1.3 s.
+
+The rules that turn head pose into gestures are in `hub/gestures.py` (no camera code, tested in `tests/test_gestures.py`). The neutral pose follows slow drift, so slumping doesn't break nods; a nod is a dip and return measured against where the head just was; the dip that comes with a head tilt is not a nod. Thresholds stay at the top of `hub/face.py`.
+
+Without gestures: number keys `1`-`5` or a click pick a tile directly (websocket `{"type": "pick", "index": 0}`).
 
 ## Hub states
 
 ```
 LISTEN --nod--> THINKING --> CHOOSE --select reply--> SPEAKING --> LISTEN
-LISTEN --cancel--> HOME (Talk | Use computer | Repeat last)
+LISTEN --cancel--> HOME (Talk | Quick phrases | Text someone | More | Back)
+                   More = Use computer | Repeat last | Stop listening
+QUICK PHRASES: fixed lines (profile "phrases"), 3 at a time, spoken at once. No model needed.
+STOP LISTENING: everything heard is dropped until the next nod.
+TEXT SOMEONE: pick a person from the profile -> 3 messages -> pick -> (auto) open Messages,
+              open the chat, type -> Yes/No -> send
+TEXT ARRIVES (POST /incoming): "Andrew texted you. Nod to answer" --nod--> 3 answers
+              + "Other answers" + "Not now" --pick--> same auto steps -> Yes/No -> send.
+              If a step isn't where expected, it hands over to the step-by-step tiles.
 CHOOSE "More..." --> NARROW: Bonsai asks a short question + 3 options that fit the
                      conversation + "Something else" --> pick one --> 3 replies that do that
                      ("More..." again narrows deeper; "Something else" = 3 new options)
@@ -110,6 +144,10 @@ NARROW if Bonsai fails --> fixed KIND tiles (Yes | No | Ask a question | Somethi
 COMPUTER: /screen -> Bonsai picks 3 next steps + "Done" -> select -> /act -> /screen -> repeat
           a step that sends/posts/deletes -> Yes/No first ("No" is highlighted) -> /act -> LISTEN
           /act fails -> "That didn't work. Try another?" + new steps
+          task complete -> "That looks done" with Done as the first, highlighted tile
+          a typed message can be reworded: "Write a different message" -> 3 more wordings
+Tiles left untouched for 90 s are put away (TILES_TIMEOUT_S).
+A sidecar or Bonsai failure never leaves the hub stuck: it says what failed and returns to LISTEN.
 ```
 
 Two ways into computer mode:
@@ -122,11 +160,19 @@ How a computer step is chosen (`prompts/actions.txt`, `prompts/message.txt`):
 - When the best step is typing a message, the 3 tiles are 3 wordings of that message.
 - "Send" is not offered while every text field is empty.
 - Tile text comes from the real element ("press · Andrew", "type · “come back”"), so a tile says exactly what will happen.
+- Bonsai answers with short step codes ("press 3", "type 2", "open Safari") and the goal is decided once per task, which keeps a step to 1.5-2.5 s.
+- Fixed rules sit around Bonsai's answer: the person the friend named out loud is the recipient; once a message is typed, Send is the first tile; a control already pressed in this task is not offered again; only message boxes get typed into.
+- The first step is worked out while the spoken reply ("yeah one sec") is still playing.
+
+Prompt files (`prompts/*.txt`) have two parts split by a line of `=====`. Above it is what never changes between calls (who he is, the rules): it is sent as the system message and llama-server keeps it cached. Below it is what changed (conversation, screen). Keep anything that varies below the line.
+
+State sent to the UI over `/ws` now also has: `camera` (`on`, `face`, `calibrating`, `error`), `task` (`goal`, `done`) during computer mode, `incoming` (`from`, `text`), `paused`, and `stats.sidecar_ok`. History entries can be `{"who": "text", "from": ...}` and `{"who": "me_text", "to": ...}` as well as `friend` and `me`.
 
 ## Rules
 
 - Tiles: 3 suggestions + 1 escape tile ("More..." in talk mode, "Done" in computer mode).
 - Replies under 12 words, in the character's voice, never invent facts about them.
-- Anything that sends, posts, or deletes gets a spoken confirmation first that includes the text (`Send "come back"?`), answered with Yes / No tiles. "No" starts highlighted, so one stray smile can never send something.
+- Anything that sends, posts, or deletes gets a spoken confirmation first that includes the text and who it goes to (`Send "come back" to Andrew?`), answered with Yes / No tiles. "No" starts highlighted, so one stray smile can never send something. He can answer while the question is still being spoken.
+- The replies he picks are saved in `hub/learned.json` (this Mac only, git-ignored) and the last few are shown to Bonsai as examples of his real voice. `LEARN=0` turns it off.
 - The hub pre-generates replies when the friend pauses (0.8 s after a final transcript) so the nod feels instant.
 - No network calls except localhost. Demo runs with Wi-Fi off.
