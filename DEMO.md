@@ -23,7 +23,7 @@ On the camera, opening the mouth means "my turn" and a nod means back (swapped S
 
 ## The demo guide (scripted lines)
 
-For the demo, the lines below are guided by `prompts/demo.json`: Bonsai is told which three options to give for them and the hub keeps those three, in that order. Anything else anyone says is still left to Bonsai, and so are "More...", "Other answers", the computer steps and who a text goes to. `DEMO_GUIDE=0 ./start.sh` (or deleting the file) turns it off. Edit the file to change a wording; no restart needed.
+**Off by default.** Start with `DEMO_GUIDE=1 ./start.sh` to use it. When on, the lines below are guided by `prompts/demo.json`: Bonsai is told which three options to give for them and the hub keeps those three, in that order. Anything else anyone says is still left to Bonsai, and so are "More...", "Other answers", the computer steps and who a text goes to. Edit the file to change a wording; no restart needed.
 
 | Say or send this (wording can vary, the key words matter) | The three tiles |
 |---|---|

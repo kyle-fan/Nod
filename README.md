@@ -71,7 +71,7 @@ Useful switches (all optional, set before `./start.sh`):
 | `LEARN=0` | Don't remember picked replies |
 | `EXPRESS=1` | Texting someone in the profile takes 3 picks instead of 5: agree, pick a wording, confirm |
 | `NOD_SWAP=0` | Don't swap the camera triggers for "my turn" and "back" |
-| `DEMO_GUIDE=0` | Don't steer the rehearsed demo lines (`prompts/demo.json`); leave every reply to Bonsai |
+| `DEMO_GUIDE=1` | Script the three options for the rehearsed demo lines in `prompts/demo.json`. Off by default: every reply comes from Bonsai |
 | `NOD_GESTURES=classic` | The older gesture rules, if the new ones don't suit your face. The dev bar's **Classic gestures** checkbox switches while running |
 
 First run needs Wi-Fi once to download the speech and face models. After that everything loads from disk.
