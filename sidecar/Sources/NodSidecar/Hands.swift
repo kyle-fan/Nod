@@ -12,6 +12,8 @@ final class Hands: @unchecked Sendable {
     private var clickIDs: Set<Int> = []                  // ids that need a real mouse click, not AXPress
     private var backID: Int?                             // synthetic "Back to conversations"
     private var chatViewUntil = Date.distantPast         // Messages: show the open chat, not the list
+    private var rowNames: [Int: String] = [:]            // Messages list view: id -> the name on the row
+    private var pressedChat: String?                     // the row that was just pressed (the open chat)
     private var lastTarget: NSRunningApplication?        // last real app in front (never Blink itself)
     private let ignoredApps: Set<String>
     private static let browsers: Set<String> = [
@@ -315,7 +317,11 @@ final class Hands: @unchecked Sendable {
             field = find(identifier: "messageBodyField", in: win, budget: &b)
         }
 
-        let chatName = string(win, kAXTitleAttribute)
+        // The chat that is open is the row that was just pressed. The window title can lag behind
+        // or show the contact's old name after a rename, so it is only the fallback.
+        let title = string(win, kAXTitleAttribute)
+        let chatName = lock.withLock({ pressedChat }) ?? title
+        if let title, let chatName, title != chatName { print("[sidecar] Messages window title is '\(title)', using pressed row '\(chatName)'") }
         var out: [[String: Any]] = []
         var map: [Int: AXUIElement] = [:]
         var roleMap: [Int: String] = [:]
@@ -323,6 +329,7 @@ final class Hands: @unchecked Sendable {
         var clicks = Set<Int>()
         var back: Int?
         var id = 0
+        var names: [Int: String] = [:]
 
         // Two views, the same shapes as the hub's rehearsal Mac (hub/sidecar.py FakeMac):
         //  - list view: one button per chat. No message box, so nothing can be typed to whoever
@@ -360,9 +367,11 @@ final class Hands: @unchecked Sendable {
                 // instead of opening it, so rows are opened with a real click.
                 clicks.insert(id)
                 roleMap[id] = "button"
+                names[id] = name
                 out.append(["id": id, "role": "button", "label": name])
             }
         }
+        lock.withLock { rowNames = names }
         lock.withLock { elements = map; roles = roleMap; sendFieldID = sendMap; clickIDs = clicks; backID = back }
         return ["app": "Messages", "elements": out]
     }
@@ -442,7 +451,7 @@ final class Hands: @unchecked Sendable {
         guard Hands.trusted else { return err(Hands.permissionError) }
         let id = (action["id"] as? Int) ?? Int(action["id"] as? String ?? "") ?? -1
         if type == "press", lock.withLock({ backID == id }) {
-            lock.withLock { chatViewUntil = .distantPast }
+            lock.withLock { chatViewUntil = .distantPast; pressedChat = nil }
             return ["ok": true]
         }
         if type == "press", let field = lock.withLock({ sendFieldID[id] }) {
@@ -455,7 +464,7 @@ final class Hands: @unchecked Sendable {
         }
         if type == "press", lock.withLock({ clickIDs.contains(id) }) {
             let result = await clickElement(el)
-            if result["ok"] as? Bool == true { lock.withLock { chatViewUntil = Date().addingTimeInterval(90) } }
+            if result["ok"] as? Bool == true { lock.withLock { chatViewUntil = Date().addingTimeInterval(90); pressedChat = rowNames[id] } }
             return result
         }
         if type == "press" { return press(el) }
