@@ -45,7 +45,7 @@ context  ->  Bonsai predicts options  ->  tiles on screen  ->  head gesture pick
 ```json
 { "from": "Andrew", "text": "where are you" }
 ```
-- A text message arrived. The hub shows it, and the next nod offers 3 answers to it instead of talk replies (see Hub states). The same message reported twice counts once.
+- A text message arrived. The hub shows it, and the next nod offers 3 answers to it instead of talk replies (see Hub states). The same message reported twice counts once. The hub keeps the first 500 characters of `text`; without `from` or `text` it answers `{"ok": false}`.
 
 ## Hub -> Sidecar
 
