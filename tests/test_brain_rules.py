@@ -72,6 +72,20 @@ def test_messages_are_written_to_the_person_not_about_them():
     assert f("the weather is nice") == "the weather is nice"
 
 
+def test_long_screens_are_cut_down_but_keep_what_was_named():
+    names = ["Person %d" % i for i in range(1, 30)] + ["Zed Marlow"]
+    screen = [{"id": i + 1, "role": "button", "label": n} for i, n in enumerate(names)]
+    short = brain._shortlist(screen, said("can you tell Zed to come back"), "")
+    labels = [e["label"] for e in short]
+    assert len(short) <= 18 and "Zed Marlow" in labels and labels[:3] == ["Person 1", "Person 2", "Person 3"], labels
+    assert brain._shortlist(screen[:10], said("x"), "") == screen[:10]          # short screens are untouched
+    page = [{"id": 1, "role": "textfield", "label": "Address", "value": ""}] + \
+           [{"id": i + 2, "role": "link", "label": "Story %d" % i} for i in range(40)] + \
+           [{"id": 99, "role": "link", "label": "Yankees vs Red Sox: watch live"}, {"id": 100, "role": "button", "label": "Play"}]
+    labels = [e["label"] for e in brain._shortlist(page, said("put the yankees game on"), "")]
+    assert "Yankees vs Red Sox: watch live" in labels and "Play" in labels and "Address" in labels, labels
+
+
 def test_finished_rules():
     assert brain._looks_finished("put the yankees game on", ['Pressed "Yankees vs Red Sox"', 'Pressed "Play"'])
     assert not brain._looks_finished("put the yankees game on", ['Pressed "Yankees vs Red Sox"'])

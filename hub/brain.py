@@ -440,12 +440,12 @@ async def suggest_actions(history: list[dict], screen: dict, done: list[str] | N
     Returns (actions, ms, ok, info) where info = {"goal", "app", "finished"}.
     Each action gets a "label" built from the real element, so a tile says what will happen."""
     p = load_profile()
-    elements = screen.get("elements", [])
-    by_id = {e["id"]: e for e in elements}
     app = screen.get("app", "unknown")
-    apps = [a for a in p.get("apps", []) if a != app]
     done = done or []
     info = {"goal": (goal or {}).get("goal", ""), "app": (goal or {}).get("app", ""), "finished": False}
+    elements = _shortlist(screen.get("elements", []), history, info["goal"])
+    by_id = {e["id"]: e for e in elements}
+    apps = [a for a in p.get("apps", []) if a != app]
 
     def line(e):
         if e["role"] in TYPEABLE:
@@ -576,6 +576,31 @@ async def suggest_actions(history: list[dict], screen: dict, done: list[str] | N
 
 NOT_A_PERSON = ("send", "post", "submit", "back", "search", "new message", "compose", "call", "play",
                 "reload", "full screen", "done")
+
+
+MAX_LISTED = 14     # Bonsai 2 9B chooses worse from long lists
+
+
+def _shortlist(elements: list[dict], history: list[dict], goal: str) -> list[dict]:
+    """A long screen (30 chats, 40 links) is cut down for Bonsai: text boxes, the first dozen
+    things, and anything the friend or the goal names, wherever it is on the screen."""
+    if len(elements) <= MAX_LISTED:
+        return elements
+    said = next((t["text"].lower() for t in reversed(history) if t["who"] == "friend"), "")
+    words = {w for w in re.findall(r"[a-z0-9']+", said + " " + goal.lower()) if len(w) > 2}
+    keep = []
+    for i, e in enumerate(elements):
+        label_words = set(re.findall(r"[a-z0-9']+", str(e["label"]).lower()))
+        important = (e["role"] in TYPEABLE or any(str(e["label"]).lower().startswith(w) for w in ("send", "back", "play"))
+                     or bool(label_words & words))
+        if important or i < 12:
+            keep.append(e)
+    # the named ones first-come: never drop them to fit; trim the rest from the end
+    named = [e for e in keep if set(re.findall(r"[a-z0-9']+", str(e["label"]).lower())) & words or e["role"] in TYPEABLE]
+    others = [e for e in keep if e not in named]
+    room = max(0, MAX_LISTED + 4 - len(named))
+    chosen = set(id(e) for e in named + others[:room])
+    return [e for e in elements if id(e) in chosen]
 
 
 def _named_on_screen(history: list[dict], elements: list[dict]) -> dict | None:

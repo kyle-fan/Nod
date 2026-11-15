@@ -35,7 +35,7 @@ def main() -> int:
             print(f'  {GREEN}OK{END}    "{person}" from the profile has a chat ({hit[0]})')
         else:
             warnings += 1
-            print(f'  {YELLOW}CHECK{END} no chat called "{person}" among the first 12: "tell {person} ..." will say it '
+            print(f'  {YELLOW}CHECK{END} no chat called "{person}" in the chat list: "tell {person} ..." will say it '
                   "can't see the chat. Rename a contact, or bring that chat to the top")
     return 1 if warnings else 0
 

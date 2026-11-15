@@ -346,7 +346,9 @@ final class Hands: @unchecked Sendable {
             out.append(["id": 3, "role": "button", "label": "Send"])
         } else {
             var seen = Set<String>()
-            for row in children(list).prefix(60) where out.count < 12 {
+            // Up to 30 chats. The hub shows Bonsai the first dozen plus whoever the friend named,
+            // so someone further down the list can still be found.
+            for row in children(list).prefix(80) where out.count < 30 {
                 guard let desc = string(row, kAXDescriptionAttribute) ?? string(row, kAXTitleAttribute) else { continue }
                 // "Andrew, come back, 10:50 PM" / "Andrew, Pinned" -> "Andrew"
                 let name = desc.components(separatedBy: ", ").first?.trimmingCharacters(in: .whitespaces) ?? ""
