@@ -19,22 +19,22 @@ MODEL_URL = ("https://storage.googleapis.com/mediapipe-models/face_landmarker/"
 MODEL_PATH = Path(__file__).resolve().parent / "models" / "face_landmarker.task"
 
 # ---- thresholds (tune these with --debug) ----
-TILT_DEG = 7.5       # roll past this = left/right
-TILT_RESET = 3.0     # must come back within this before the next tilt
-NOD_DEG = 7.0        # pitch dip needed for a nod
+TILT_DEG = 5.6       # roll past this = left/right
+TILT_RESET = 2.2     # must come back within this before the next tilt
+NOD_DEG = 10.1       # pitch dip needed for a nod
 NOD_WINDOW = 0.9     # seconds: down and back up within this
 # Select gesture. "smile" separates cleanly (0.78 vs 0.03 for anything else) and works
 # with glasses. "brow" (eyebrow raise) reads weak or not at all behind glasses.
 SELECT_SIGNAL = "smile"   # "smile" or "brow"
-SELECT_T = 0.40      # above baseline. For "brow" use about 0.25
+SELECT_T = 0.42      # above baseline. For "brow" use about 0.25
 SELECT_HOLD = 0.25   # seconds held
 BROW_QUIET = 0.4     # "brow" only: head must be level this long first (nodding lifts eyebrows)
-JAW_T = 0.35         # mouth open above baseline
+JAW_T = 0.45         # mouth open above baseline
 JAW_HOLD = 0.35
 COOLDOWN = 0.35      # seconds between any two events
 TILT_REPEAT = 0.9    # keep the head tilted: move again every this many seconds (0 = off)
 FLIP_ROLL = False
-FLIP_PITCH = True    # Kyle's webcam: nodding down reads positive
+FLIP_PITCH = False   # MacBook Pro camera (demo Mac), from --measure. Kyle's webcam needs True
 CALIBRATE_S = 1.5
 
 
