@@ -268,9 +268,11 @@ async def test_text_from_unknown_chat_falls_back_to_steps():
     await fresh()
     await text_arrives(who="Coach", text="where are you")
     await g("nod", "select")
-    # there is no chat called Coach on the pretend Mac: it hands over to step-by-step tiles
-    assert S.mode == "computer" and S.status == "Pick the next step", (S.mode, S.status)
-    assert sidecar.FAKE.sent == []
+    # there is no chat called Coach on the pretend Mac: it says so, and offers no one else's chat
+    assert S.mode == "computer" and S.status == "Can't see a chat with Coach in Messages", (S.mode, S.status)
+    assert labels() == ["Done"]
+    await g("select")
+    assert sidecar.FAKE.sent == [] and sidecar.FAKE.draft == "" and S.mode == "listen"
 
 
 async def test_picked_replies_are_remembered_and_shown_to_bonsai():
