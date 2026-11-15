@@ -135,6 +135,13 @@ func runSidecar() async throws {
         }
     }
 
+    // Turn the floating tile window on or off while running: POST /overlay?on=1 (or 0).
+    await server.appendRoute("POST /overlay") { request in
+        let on = request.query.first(where: { $0.name == "on" })?.value != "0"
+        await MainActor.run { if on { showOverlay() } else { hideOverlay() } }
+        return json(["ok": true, "overlay": on])
+    }
+
     // Debug: what a transcript would be corrected to, e.g. /names?text=tell%20Kayden%20Ron
     await server.appendRoute("GET /names") { request in
         let text = (request.query.first(where: { $0.name == "text" })?.value ?? "").replacingOccurrences(of: "+", with: " ")
@@ -180,6 +187,24 @@ func runSidecar() async throws {
     try await server.run()
 }
 
+// MARK: Overlay
+
+@MainActor var overlayWindow: Overlay?
+
+/// Blink floats over whatever app is in use (SPEC "Overlay window").
+@MainActor func showOverlay() {
+    guard overlayWindow == nil else { return }
+    let url = URL(string: env["NOD_OVERLAY_URL"] ?? "http://127.0.0.1:8000/?overlay=1")!
+    let overlay = Overlay(url: url, heightFraction: CGFloat(Double(env["NOD_OVERLAY_HEIGHT"] ?? "") ?? 0.34))
+    overlay.show()
+    overlayWindow = overlay
+}
+
+@MainActor func hideOverlay() {
+    overlayWindow?.close()
+    overlayWindow = nil
+}
+
 // MARK: Entry point
 
 /// The main thread belongs to AppKit (needed for the overlay window and app notifications);
@@ -195,14 +220,7 @@ enum Sidecar {
         }
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)   // no Dock icon, never becomes the frontmost app
-        var overlay: Overlay?
-        if env["NOD_OVERLAY"] == "1" {
-            // Blink floats over whatever app is in use (SPEC "Overlay window").
-            let url = URL(string: env["NOD_OVERLAY_URL"] ?? "http://127.0.0.1:8000/?overlay=1")!
-            overlay = Overlay(url: url, heightFraction: CGFloat(Double(env["NOD_OVERLAY_HEIGHT"] ?? "") ?? 0.34))
-            overlay?.show()
-        }
+        if env["NOD_OVERLAY"] == "1" { showOverlay() }
         app.run()
-        _ = overlay
     }
 }

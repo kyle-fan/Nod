@@ -47,6 +47,12 @@ final class Overlay: NSObject, WKNavigationDelegate {
         load()
     }
 
+    func close() {
+        panel?.orderOut(nil)
+        panel = nil
+        web = nil
+    }
+
     private func load() {
         web?.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 5))
     }
