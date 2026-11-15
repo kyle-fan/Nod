@@ -708,6 +708,9 @@ async def draft_actions(history: list[dict], screen: dict, field_id, goal: str,
         if who:
             goal = f"text {who} what the friend just asked you to pass on or ask"
     drafts = await _draft_messages(p, spoken or history, screen.get("app", ""), label, goal, avoid)
+    if len(drafts) < 2:      # most wordings were unusable: ask once more so there is a choice
+        more = await _draft_messages(p, spoken or history, screen.get("app", ""), label, goal, avoid + drafts)
+        drafts = list(dict.fromkeys(drafts + more))[:3]
     return [{"type": "type", "id": field["id"], "text": d, "label": d} for d in drafts]
 
 
