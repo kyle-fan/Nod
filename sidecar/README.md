@@ -39,6 +39,10 @@ Settings (environment variables, all optional):
 | `NOD_EARS` | `1` | `0` turns the microphone off |
 | `NOD_AUDIO_FILE` | unset | Test only: feed a wav file instead of the microphone |
 | `NOD_DEBUG` | `0` | `1` logs transcription timings |
+| `NOD_SILENT` | `0` | `1` generates speech and waits as long as it would play, but makes no sound (rehearsal, tests). Also `POST /quiet?on=1` |
+| `NOD_WATCH_MESSAGES` | `0` | `1` tells the hub (`POST /incoming`) when a text message arrives |
+| `NOD_VOCAB` | `1` | `0` stops giving Whisper the names and proper nouns from `hub/profile.json` as hints |
+| `NOD_MID_SENTENCE_EXTRA` | `0.6` | Extra seconds to wait when the words so far don't end a sentence |
 | `NOD_OVERLAY` | `0` | `1` opens the floating, click-through tile window (loads the hub page with `?overlay=1`) |
 | `NOD_OVERLAY_HEIGHT` | `0.34` | Share of the screen height the overlay covers, from the bottom |
 | `NOD_IGNORE_APPS` | `Terminal,iTerm2,Claude,Xcode,loginwindow` | Apps `/screen` never treats as the app to control |
