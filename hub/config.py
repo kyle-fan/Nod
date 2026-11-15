@@ -32,3 +32,8 @@ UI_DIR = ROOT / "ui"
 LEARNED_PATH = ROOT / "hub" / "learned.json"
 LEARN = os.getenv("LEARN", "1") == "1"
 LEARNED_SHOWN = int(os.getenv("LEARNED_SHOWN", "6"))
+
+# EXPRESS=1: when the friend asks him to text someone in his profile, skip the step-by-step
+# tiles. After he agrees he picks a wording, the Mac opens the chat and types it, and he
+# confirms: 3 picks instead of 5. Off by default so every step stays visible.
+EXPRESS = os.getenv("EXPRESS", "0") == "1"

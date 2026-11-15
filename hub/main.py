@@ -214,6 +214,12 @@ async def say(text, then=None):
     S.history.append({"who": "me", "text": text, "at": time.time()})
     S.last_said = text
     await broadcast()
+    express = express_recipient() if then == "computer" else None
+    if express:              # EXPRESS=1 and the friend named someone he texts: go straight to wordings
+        S.text_to, S.texts_seen = express, []
+        await speak(text)
+        await show_new_texts()
+        return
     if then == "computer":   # he just agreed to do something on the Mac: start doing it
         start_task()
         # Read the screen and ask Bonsai for the first step while the reply is being spoken,
@@ -380,6 +386,18 @@ async def send_text(who, text):
 
 
 # ---------- computer mode ----------
+
+def express_recipient() -> str | None:
+    """With EXPRESS=1: the person in his profile that the friend just asked him to text."""
+    if not config.EXPRESS:
+        return None
+    asked = next((t["text"].lower() for t in reversed(S.history[:-1]) if t["who"] == "friend"), "")
+    import re
+    if not re.search(r"\b(tell|ask|text|let|remind|message)\b", asked):
+        return None
+    people = [p for p in brain.load_profile().get("people", {}) if re.search(rf"\b{re.escape(p.lower())}\b", asked)]
+    return people[0] if len(people) == 1 else None
+
 
 async def speak(text):
     """Speak through the sidecar. A sidecar that is down or restarting must never leave the

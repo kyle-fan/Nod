@@ -457,6 +457,27 @@ async def test_another_persons_open_chat_is_never_typed_into():
     assert labels()[0] == "Andrew", labels()
 
 
+async def test_express_texting_is_three_picks():
+    await fresh(app="Safari")
+    config.EXPRESS = True
+    try:
+        await friend("the game's about to start, can you tell Andrew to come back")
+        await g("nod", "select")                                # 1: "yeah one sec"
+        assert S.status == "Text Andrew", S.status
+        assert labels()[:3] == ["come back", "you coming", "game's starting"], labels()
+        await g("select")                                       # 2: the wording
+        assert S.status == 'Send "come back" to Andrew?'
+        await g("left", "select")                               # 3: yes
+        assert sidecar.FAKE.sent == [("Andrew", "come back")]
+        # someone not in his profile still goes step by step
+        await fresh()
+        await friend("can you tell Sam we're late")
+        await g("nod", "select")
+        assert S.mode == "computer" and labels()[0] == "Sam"
+    finally:
+        config.EXPRESS = False
+
+
 async def test_quick_phrases_need_no_model():
     await fresh()
     CALLS.clear()

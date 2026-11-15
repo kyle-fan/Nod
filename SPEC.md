@@ -155,6 +155,8 @@ Tiles left untouched for 90 s are put away (TILES_TIMEOUT_S).
 A sidecar or Bonsai failure never leaves the hub stuck: it says what failed and returns to LISTEN.
 ```
 
+With `EXPRESS=1`, a request to text someone in the profile skips the step tiles: agree, pick one of 3 wordings, and the hub opens the chat and types it, then asks Yes/No (3 picks instead of 5). Off by default so each step stays visible.
+
 Two ways into computer mode:
 - **Say, then do.** When the friend asks for something doable on the Mac ("tell Andrew to come back", "put the game on"), the first reply tile agrees ("yeah one sec") and is marked "then does it on the mac". Picking it speaks the reply, then goes straight to COMPUTER. Bonsai decides this per friend line (`prompts/task.txt`).
 - **Home menu.** Open mouth from LISTEN, pick "Use computer".

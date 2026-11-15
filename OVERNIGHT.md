@@ -61,6 +61,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 - **Answer a text that arrives.** "Andrew texted you. Nod to answer" gives three answers; one pick opens Messages, opens the chat and types it; then Yes sends.
 - **Text someone** from the menu, with messages suggested from the conversation.
 - **Use computer** from the menu now offers things to do ("text Andrew", "put the game on") when nobody asked for anything.
+- **Express texting** (`EXPRESS=1 ./start.sh`, off by default): "tell Andrew to come back" takes 3 picks instead of 5. Agree, pick a wording, confirm. The Mac opens the chat and types it. Kyle's step-by-step version stays the default because it shows Bonsai reading the screen.
 - **Quick phrases** ("Yes", "No", "Thank you", "I need help", ...) that work even with Bonsai off. Set your own with `"phrases"` in `hub/profile.json`.
 - **Stop listening** from the menu: nothing said is kept until the next nod.
 - **Learns your voice.** Replies you pick are saved in `hub/learned.json` (this Mac only) and shown to Bonsai as examples. `LEARN=0` turns it off; delete the file to forget.
