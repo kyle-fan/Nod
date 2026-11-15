@@ -847,12 +847,17 @@ async def _draft_messages(p: dict, history: list[dict], app: str, field: str, go
         who = field[len("Message "):].strip().lower() if field.startswith("Message ") else ""
         names = [w for w in {who, who.split()[0] if who else ""} if len(w) > 2]
 
+        example_texts = {str(x).lower() for t in p.get("texts", []) for x in t.get("texts", [])}
+        said_now = _content(friend_said(history))
+
         def fits(d: str) -> bool:
             low = d.lower()
             if re.match(r"^(ask|tell|text|remind|let)\b", low):
                 return False                      # an instruction about them, not a message to them
             if any(re.search(rf"\b{re.escape(n)}\b", low) for n in names):
                 return False                      # talks about them by name
+            if _pasted(d, example_texts) and not (_content(d) & said_now):
+                return False                      # an example text from some other situation
             # he is the one staying put: he never announces that he is on his way
             return not re.search(r"\b(on my way|omw|i'?ll be there|be there soon|i'?m coming|"
                                  r"coming (soon|over|now)|^coming back)\b", low)
