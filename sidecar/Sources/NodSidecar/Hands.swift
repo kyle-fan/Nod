@@ -41,10 +41,13 @@ final class Hands: @unchecked Sendable {
         if let bundle = app.bundleIdentifier, Hands.browsers.contains(bundle) {
             let appEl = AXUIElementCreateApplication(app.processIdentifier)
             AXUIElementSetMessagingTimeout(appEl, 0.5)
-            let window = attr(appEl, kAXFocusedWindowAttribute) ?? attr(appEl, kAXMainWindowAttribute)
-                ?? (attr(appEl, kAXWindowsAttribute) as? [AXUIElement])?.first
-            if let window, let title = string(window as! AXUIElement, kAXTitleAttribute),
-               title.lowercased().hasPrefix("blink") { return true }
+            // Any window of this browser showing the hub page makes the whole browser "Blink":
+            // the tiles live there, so it is never the app the user wants to control.
+            var windows = (attr(appEl, kAXWindowsAttribute) as? [AXUIElement]) ?? []
+            if let focused = attr(appEl, kAXFocusedWindowAttribute) { windows.append(focused as! AXUIElement) }
+            for window in windows {
+                if let title = string(window, kAXTitleAttribute), title.lowercased().hasPrefix("blink") { return true }
+            }
         }
         return false
     }
@@ -281,8 +284,15 @@ final class Hands: @unchecked Sendable {
         guard let window = (attr(appEl, kAXFocusedWindowAttribute) ?? attr(appEl, kAXMainWindowAttribute)
             ?? (attr(appEl, kAXWindowsAttribute) as? [AXUIElement])?.first as AnyObject?) else { return nil }
         let win = window as! AXUIElement
-        var budget = 800
-        guard let list = find(identifier: "ConversationList", in: win, budget: &budget) else { return nil }
+        // Just after Messages is opened its window is still being built: give it a moment.
+        var found: AXUIElement?
+        for attempt in 0..<6 {
+            var budget = 800
+            found = find(identifier: "ConversationList", in: win, budget: &budget)
+            if found != nil { break }
+            if attempt < 5 { usleep(300_000) }
+        }
+        guard let list = found else { return nil }
         var budget2 = 1500
         var field = find(identifier: "messageBodyField", in: win, budget: &budget2)
         // Right after a chat is opened Messages takes a moment to show its message box.
