@@ -58,6 +58,8 @@ func profilePeople() -> [String] {
     return []
 }
 
+nonisolated(unsafe) var earsRef: Ears?
+
 /// Loads the models, then serves HTTP until the process is killed. Runs off the main thread.
 func runSidecar() async throws {
     // MARK: Voice (loaded once)
@@ -84,6 +86,7 @@ func runSidecar() async throws {
         let fastModel = env["NOD_WHISPER_FAST"] ?? "small.en"
         let fast = fastModel.isEmpty || fastModel == whisperModel ? nil : try await Ears.loadWhisper(model: fastModel)
         let e = Ears(whisper: whisper, fast: fast, hubURL: hubURL, env: env)
+        earsRef = e
         await e.warmUp()
         if let file = env["NOD_AUDIO_FILE"] {
             log("TEST MODE: feeding \(file) instead of the microphone")
@@ -102,6 +105,14 @@ func runSidecar() async throws {
     // MARK: Routes
 
     let server = HTTPServer(address: try .inet(ip4: "127.0.0.1", port: port))
+
+    // Diagnostics: is the microphone delivering sound, and how loud is it?
+    await server.appendRoute("GET /ears") { _ in
+        guard let ears = earsRef else { return json(["ears": "off"]) }
+        let status = ears.status
+        ears.resetPeak()
+        return json(status)
+    }
 
     await server.appendRoute("GET /health") { _ in
         json(["ok": true])

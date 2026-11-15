@@ -40,6 +40,24 @@ final class Ears: @unchecked Sendable {
     private var fastPasses = 0                // fast-model passes on the current utterance
     private var stableSince = Date()          // when the partial text last changed
     private var clearCaptionAfterMute = false
+    // Diagnostics (GET /ears)
+    private var framesSeen = 0
+    private var buffersIn = 0
+    private var lastDB: Float = -100
+    private var peakDB: Float = -100
+    private var micStarted = false
+    private var lastBufferAt = Date()
+    private var micRestarts = 0
+
+    var status: [String: Any] {
+        lock.withLock {
+            ["mic_started": micStarted, "mic_restarts": micRestarts, "buffers_from_mic": buffersIn, "frames_analyzed": framesSeen,
+             "level_db": Double(lastDB), "peak_db_since_last_check": Double(peakDB),
+             "noise_floor_db": Double(noiseDB), "speech_needs_db": Double(max(absMinDB, noiseDB + gateDB)),
+             "in_sentence": inUtterance, "muted": MuteGate.shared.isMuted]
+        }
+    }
+    func resetPeak() { lock.withLock { peakDB = -100 } }
     private var preRollBuf: [Float] = []
     private var utterance: [Float] = []
     private var inUtterance = false
@@ -92,7 +110,7 @@ final class Ears: @unchecked Sendable {
 
     /// Feed 16 kHz mono samples (from the mic, or from a test file).
     func ingest(_ buffer: [Float]) {
-        lock.withLock { pending.append(buffer) }
+        lock.withLock { pending.append(buffer); buffersIn += 1; lastBufferAt = Date() }
     }
 
     func startMic() async throws {
@@ -103,6 +121,7 @@ final class Ears: @unchecked Sendable {
         try whisper.audioProcessor.startRecordingLive(inputDeviceID: nil) { [weak self] buffer in
             self?.ingest(buffer)
         }
+        lock.withLock { micStarted = true; lastBufferAt = Date() }
     }
 
     /// Dev/test only: play a wav file into the pipeline in real time, as if it were the mic.
@@ -144,6 +163,23 @@ final class Ears: @unchecked Sendable {
                 }
                 for b in buffers { consume(b) }
                 await step()
+            }
+
+            // Watchdog: macOS stops the audio engine when devices change (a camera turning on,
+            // headphones connecting). If the microphone goes quiet for 3 s, start it again.
+            let stalled = lock.withLock { micStarted && Date().timeIntervalSince(lastBufferAt) > 3 }
+            if stalled {
+                whisper.audioProcessor.stopRecording()
+                do {
+                    try whisper.audioProcessor.startRecordingLive(inputDeviceID: nil) { [weak self] buffer in
+                        self?.ingest(buffer)
+                    }
+                    print("[sidecar] microphone stream stopped; restarted it")
+                } catch {
+                    print("[sidecar] MIC ERROR: could not restart the microphone: \(error.localizedDescription)")
+                }
+                lock.withLock { lastBufferAt = Date(); micRestarts += 1 }
+                reset()
             }
 
             // WhisperKit's AudioProcessor also keeps every sample; we don't need its copy.
@@ -195,6 +231,7 @@ final class Ears: @unchecked Sendable {
         var sum: Float = 0
         for s in frame { sum += s * s }
         let db = 10 * log10(max(sum / Float(frame.count), 1e-10))
+        lock.withLock { framesSeen += 1; lastDB = db; peakDB = max(peakDB, db) }
 
         // Noise floor = 10th percentile of the last ~5 s. It follows the room both ways:
         // a pause pulls it down within half a second, and steady background noise
