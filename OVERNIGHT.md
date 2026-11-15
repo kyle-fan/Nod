@@ -50,9 +50,9 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 
 ### More reliable
 
-- **153 of 153** practice chains ended correctly (right person, right message, or right page), always picking the first tile, with the real model. Before the fixes below it was 16 of 18.
+- **171 of 171** practice chains ended correctly (right person, right message, or right page), always picking the first tile, with the real model. Before the fixes below it was 16 of 18.
 - On chat lists the size of yours (12 and 30 names) and a busy sports page (25 links), the first tile was right in all 21 cases I tried. The sidecar now lists up to 30 chats, so someone further down can be found.
-- About 950 random gestures, friend lines and incoming texts thrown at it in five runs: no crash, never stuck, and nothing was sent without a Yes.
+- About 1,100 random gestures, friend lines and incoming texts thrown at it in six runs: no crash, never stuck, and nothing was sent without a Yes.
 - **Wrong recipient fixed.** "Let mom know I'll call her tonight" used to open Andrew's chat, because the profile calls him the best friend. The person the friend names is now always the recipient, and the confirmation says who it goes to: `Send "i'll call you tonight" to Mom?`
 - **No chat, no guess.** If the person has no chat on screen, the only tile is Done ("Can't see a chat with Coach in Messages"). Last night it opened someone else's chat. And if another person's chat is open, nothing can be typed or sent there: "Back to conversations" comes first.
 - **Never stuck.** A sidecar restart mid-speech (what froze it on "Speaking" last night), a Bonsai failure, or any error now returns to listening with a plain message.
@@ -61,6 +61,8 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 - **Messages worded properly**: "ask Andrew if he wants pizza" becomes "do you want pizza", not "sure", and "let mom know I'll call her tonight" becomes "i'll call you tonight", not "i'll call her tonight".
 - **Passing something on is not hijacked** by the other person's last text in that chat. That only shapes the wording when the task is to answer it.
 - **"More..." and "Other answers" really give something new.** Bonsai used to hand back the same three when shown what you had passed on; and choosing "Ask when" produced long rambling lines. Both fixed: you now get short real questions ("when do you need it?") and genuinely different options.
+- **No more jokes at bad news.** Bonsai liked to paste the profile's example lines into other conversations ("want to get food about it" when someone's grandmother is in hospital, "movie's on, hurry up" for a baseball game). Example lines are now only allowed in the conversation they belong to, and replaced otherwise.
+- **A request heard in two pieces** ("can you tell Andrew" ... "to come back") is treated as the one request it was.
 - **Replies fit the kind of line**: a yes-or-no question gets a clear yes and a clear no; "thai or pizza" gets one of each; a question about a fact Bonsai can't know gets "not sure" instead of a made-up answer (mostly: it still slips sometimes).
 
 ### Gestures
