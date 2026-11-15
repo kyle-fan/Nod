@@ -89,6 +89,7 @@ class State:
         self.tiles_at = 0.0                # when the tiles on screen were put up
         self.streaming = False             # tiles may be filled in while Bonsai is still writing
         self.pregen_partial: list[str] = []
+        self.pregen_for = 0                # the history length those partial replies answer
         self.done: list[str] = []          # computer steps taken this session
         self.pregen: tuple | None = None   # (history_len, replies, offer_computer, bonsai_ok)
         self.pregen_task: asyncio.Task | None = None
@@ -163,7 +164,8 @@ async def show_replies(kind=None, path=None):
     if fresh and not S.pregen and task and not task.done():
         # Nodded while pre-generation is mid-flight: wait for it, don't start a duplicate call.
         S.mode, S.status, S.tiles = "thinking", "Thinking...", []
-        await stream_tiles(S.pregen_partial)   # show what it has written so far
+        if S.pregen_for == len(S.history):
+            await stream_tiles(S.pregen_partial)   # show what it has written so far
         await broadcast()
         await asyncio.wait([task])   # doesn't raise if the task was cancelled
     if fresh and S.pregen and S.pregen[0] == len(S.history):
@@ -229,7 +231,7 @@ async def pregenerate(n_turns):
     if len(S.history) != n_turns or S.mode != "listen":
         return
     offer = await brain.computer_task(S.history)
-    S.pregen_partial = []
+    S.pregen_partial, S.pregen_for = [], n_turns
 
     async def partial(replies):
         if len(S.history) == n_turns:
