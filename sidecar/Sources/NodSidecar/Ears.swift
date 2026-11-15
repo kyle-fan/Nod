@@ -349,7 +349,7 @@ final class Ears: @unchecked Sendable {
     /// Strip Whisper's non-speech tags and the stock phrases it hallucinates on noise.
     static func clean(_ raw: String) -> String {
         var text = raw
-        for pattern in ["\\[[^\\]]*\\]", "\\([^\\)]*\\)", "<\\|[^|]*\\|>"] {
+        for pattern in ["\\[[^\\]]*\\]", "\\([^\\)]*\\)", "<\\|[^|]*\\|>", "\\*[^*]*\\*"] {
             text = text.replacingOccurrences(of: pattern, with: " ", options: .regularExpression)
         }
         text = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
