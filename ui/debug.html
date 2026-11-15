@@ -33,7 +33,7 @@
 </head>
 <body>
 <h1>Under the hood</h1>
-<p class="lead">Live readings from this Mac. Nothing here leaves it. Keep this open next to Blink while tuning gestures or tracking down a problem.</p>
+<p class="lead">Live readings from this Mac. Nothing here leaves it. Keep this open next to OpenMouth while tuning gestures or tracking down a problem.</p>
 <div class="grid">
   <section><h2>Now</h2><div id="now"></div></section>
   <section><h2>Face (what the camera reads, against each gesture's threshold)</h2><div id="face"></div></section>
@@ -125,7 +125,7 @@ async function tick() {
     : '<p class="muted">No calls yet.</p>';
   $("log").innerHTML = d.events.length ? "<table>" + d.events.slice().reverse().map(ev =>
       `<tr><td>${ago(d.now, ev.at)}</td><td class="kind">${esc(ev.kind)}</td><td>${esc(ev.text)}</td></tr>`).join("") + "</table>"
-    : '<p class="muted">Nothing yet. Nod, speak, or press a key in Blink.</p>';
+    : '<p class="muted">Nothing yet. Nod, speak, or press a key in OpenMouth.</p>';
 }
 tick(); setInterval(tick, 250);
 </script>

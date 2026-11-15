@@ -782,7 +782,7 @@ async def test_camera_gestures_can_be_swapped_open_mouth_is_my_turn():
         assert S.mode == "choose"
         await g("cancel")
         await text_arrives()
-        assert S.status == "Andrew texted you. Nod to answer", S.status   # the wording never changes
+        assert S.status == "Andrew texted you. Open mouth to answer", S.status
     finally:
         await main.set_settings({"swap_nod_mouth": False})
     assert S.status == "Andrew texted you. Nod to answer", S.status

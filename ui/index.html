@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Blink</title>
+<title>OpenMouth</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23ffd84a' d='M12 1.8l3 6.6 7.2.8-5.4 4.9 1.5 7.1L12 17.6l-6.3 3.6 1.5-7.1L1.8 9.2 9 8.4z'/%3E%3C/svg%3E">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- No build step, no external files: everything must work with Wi-Fi off.
@@ -193,7 +193,7 @@
 </head>
 <body>
 <header>
-  <div class="brand"><b>✦</b> BLINK</div>
+  <div class="brand"><b>✦</b> OPENMOUTH</div>
   <div><span class="pill" id="model">on-device</span><span class="pill" id="lat">-- s</span></div>
 </header>
 
@@ -209,7 +209,7 @@
     <div id="chip"></div>
   </div>
   <div id="tiles"></div>
-  <p class="hint" id="hint">nod = my turn · tilt = move (hold to keep moving) · smile = pick · open mouth = back</p>
+  <p class="hint" id="hint">open mouth = my turn · tilt = move (hold to keep moving) · smile = pick · nod = back</p>
 </div>
 
 <footer id="dev">
@@ -254,11 +254,11 @@ const STAR = [
 let ws, lastTiles = "", lastConvo = "", lastGestureN = null, lastCaption = "", captionTimer = null;
 const GESTURE_LABEL = {nod: "nod", left: "← tilt", right: "tilt →", select: "smile ✓", cancel: "back"};
 const SUB = {listen: "Open mouth when it's your turn", computer: "Pick the next step"};
-let swapped = false, shownSwap = null;   // on-screen wording: always the normal one (nod = my turn)
+let swapped = true, shownSwap = null;   // on-screen wording: always the normal one (nod = my turn)
 
 const welcome = () => `<div id="welcome">
   <h2>Talk and use your Mac with your face</h2>
-  <p class="lead">A friend talks. Blink suggests what you might say or do. You choose with small head and face movements, and it speaks or acts for you. Everything runs on this Mac, with Wi-Fi off.</p>
+  <p class="lead">A friend talks. OpenMouth suggests what you might say or do. You choose with small head and face movements, and it speaks or acts for you. Everything runs on this Mac, with Wi-Fi off.</p>
   <div class="how glass"><div class="ico">${swapped ? "◯" : "↕"}</div><b>${swapped ? "Open your mouth" : "Nod"}</b><span>It's my turn: show me replies</span></div>
   <div class="how glass"><div class="ico">↔</div><b>Tilt your head</b><span>Move the highlight left or right</span></div>
   <div class="how glass"><div class="ico">☺</div><b>Smile</b><span>Pick the highlighted tile</span></div>
@@ -296,7 +296,7 @@ function render(s) {
   }
 
   if (s.settings) { $("optExpress").checked = s.settings.express; $("optLearn").checked = s.settings.learn; $("optClassic").checked = !!s.settings.classic_gestures;
-    $("optSwap").checked = !!s.settings.swap_nod_mouth;   // only the camera changes; the wording on screen stays the normal Nod interface
+    swapped = !!s.settings.swap_nod_mouth; $("optSwap").checked = swapped;   // only the camera changes; the wording on screen stays the normal Nod interface
     if (swapped !== shownSwap) {
       shownSwap = swapped; lastConvo = "";   // redraw the welcome card with the right gestures
       $("hint").textContent = swapped ? "open mouth = my turn · tilt = move (hold to keep moving) · smile = pick · nod = back"
@@ -322,7 +322,7 @@ function render(s) {
 
   const confirming = s.tiles.some(t => t.kind === "confirm");
   const sub = confirming ? "Tilt to Yes and smile to confirm"
-            : s.mode === "listen" ? (swapped ? "Open your mouth when it's your turn" : SUB.listen) : s.mode in SUB ? SUB[s.mode] : "";
+            : s.mode === "listen" ? (swapped ? "Open mouth when it's your turn" : "Nod when it's your turn") : s.mode in SUB ? SUB[s.mode] : "";
   $("bubble").innerHTML = esc(s.status) + (sub ? `<small>${sub}</small>` : "");
   $("lat").textContent = s.stats.latency_ms != null ? `${(s.stats.latency_ms / 1000).toFixed(1)} s / reply` : "-- s";
   $("model").textContent = s.stats.bonsai_ok ? s.stats.model : "Bonsai offline (fallback)";

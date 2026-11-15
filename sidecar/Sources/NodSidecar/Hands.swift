@@ -48,7 +48,7 @@ final class Hands: @unchecked Sendable {
             var windows = (attr(appEl, kAXWindowsAttribute) as? [AXUIElement]) ?? []
             if let focused = attr(appEl, kAXFocusedWindowAttribute) { windows.append(focused as! AXUIElement) }
             for window in windows {
-                if let title = string(window, kAXTitleAttribute), title.lowercased().hasPrefix("blink") { return true }
+                if let title = string(window, kAXTitleAttribute), title.lowercased().hasPrefix("openmouth") || title.lowercased().hasPrefix("blink") { return true }
             }
         }
         return false

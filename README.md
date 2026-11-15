@@ -1,4 +1,4 @@
-# Blink
+# OpenMouth
 
 Talk, text, and use your Mac with a nod, a head tilt, and a smile. Fully on-device: it works with Wi-Fi off.
 
@@ -8,9 +8,9 @@ Built for the Local AI Hackathon (Recreate theme). Bonsai 2 predicts what you wa
 
 ## What it does
 
-Theo can't speak clearly or use his hands. With Blink:
+Theo can't speak clearly or use his hands. With OpenMouth:
 
-- **A friend talks, Theo answers.** Blink transcribes the friend, Bonsai suggests three replies, Theo tilts his head to choose and smiles to pick, and the Mac says it in his voice. The replies are ready before he nods.
+- **A friend talks, Theo answers.** OpenMouth transcribes the friend, Bonsai suggests three replies, Theo tilts his head to choose and smiles to pick, and the Mac says it in his voice. The replies are ready before he nods.
 - **A friend asks him to do something, and he does it.** "Can you tell Andrew to come back?" becomes: agree out loud, open Andrew's chat, pick a wording, confirm, sent. About 9 seconds and five picks (three with `EXPRESS=1`).
 - **A text arrives, and he answers it.** "Andrew texted you. Nod to answer." One pick opens Messages, opens the chat and types the answer; a second confirms it.
 - **He starts things himself.** Open mouth for the menu: quick phrases that need no model ("I need help"), text someone, use the computer step by step, repeat the last thing said, or stop listening.
@@ -65,7 +65,7 @@ Useful switches (all optional, set before `./start.sh`):
 | `USE_CAMERA=0` | Keyboard only, no webcam |
 | `CAMERA_INDEX=1` | Use the second camera (an iPhone can grab the first slot) |
 | `NOD_OVERLAY=1` | Floating tile window instead of a browser tab |
-| `NOD_WATCH_MESSAGES=1` | Tell Blink when a text message arrives |
+| `NOD_WATCH_MESSAGES=1` | Tell OpenMouth when a text message arrives |
 | `NOD_SILENT=1` | Rehearsal: speech is generated but not played |
 | `NOD_TTS_SPEAKER`, `NOD_TTS_STYLE` | Voice and how it speaks (see `sidecar/README.md`) |
 | `LEARN=0` | Don't remember picked replies |

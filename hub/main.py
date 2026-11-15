@@ -143,7 +143,7 @@ def turn_word() -> str:
     """What he does to say "my turn", for the messages on screen."""
     # The screen always uses the product's own word, "Nod", whichever face movement is set to
     # trigger it (see SWAP_NOD_MOUTH): the interface looks the same either way.
-    return "Nod"
+    return "Open mouth" if config.SWAP_NOD_MOUTH else "Nod"
 
 
 def go_listen(status="Listening"):
