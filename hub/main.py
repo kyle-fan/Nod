@@ -69,6 +69,9 @@ class State:
         self.goal: dict | None = None      # {"goal", "app"} of the computer task in progress
         self.drafts_seen: list[str] = []   # message wordings already offered or typed
         self.prepared: asyncio.Task | None = None   # first computer step, worked out during speech
+        self.incoming: dict | None = None  # {"from", "text", "at"}: a text that came in, not yet answered
+        self.texts_seen: list[str] = []    # answers to that text already offered
+        self.sending: dict | None = None   # {"to", "text"} of the message waiting for Yes
         self.done: list[str] = []          # computer steps taken this session
         self.pregen: tuple | None = None   # (history_len, replies, offer_computer, bonsai_ok)
         self.pregen_task: asyncio.Task | None = None
@@ -77,7 +80,7 @@ class State:
     def view(self):
         v = {k: getattr(self, k) for k in
              ("mode", "status", "tiles", "index", "history", "partial",
-              "last_gesture", "gesture_n", "stats", "in_computer", "camera")}
+              "last_gesture", "gesture_n", "stats", "in_computer", "camera", "incoming")}
         # what the computer task is and how far it has got, for the progress line on screen
         v["task"] = {"goal": (self.goal or {}).get("goal", ""), "done": self.done[-4:]} if self.in_computer else None
         return v
@@ -103,6 +106,20 @@ def set_tiles(tiles, mode="choose", status="Choose"):
 
 def go_listen(status="Listening"):
     S.mode, S.status, S.tiles, S.index, S.in_computer, S.pending = "listen", status, [], 0, False, None
+    if status == "Listening" and text_waiting():
+        S.status = f'{S.incoming["from"]} texted you. Nod to answer'
+
+
+INCOMING_FRESH_S = 180   # an unanswered text is offered on the next nod for this long
+
+
+def text_waiting() -> bool:
+    """A text came in after the last thing said out loud, and hasn't been answered."""
+    inc = S.incoming
+    if not inc or time.time() - inc["at"] > INCOMING_FRESH_S:
+        return False
+    last_spoken = next((t for t in reversed(S.history) if t["who"] in ("friend", "me")), None)
+    return last_spoken is None or last_spoken.get("at", 0) < inc["at"]
 
 
 # ---------- talk mode ----------
@@ -157,7 +174,7 @@ async def show_intents():
 
 async def say(text, then=None):
     S.mode, S.status, S.tiles = "speaking", "Speaking", []
-    S.history.append({"who": "me", "text": text})
+    S.history.append({"who": "me", "text": text, "at": time.time()})
     S.last_said = text
     await broadcast()
     if then == "computer":   # he just agreed to do something on the Mac: start doing it
@@ -192,6 +209,76 @@ def show_phrases(page=0):
         tiles.append({"label": "More phrases", "kind": "phrases", "value": page + 1})
     tiles.append({"label": "Back", "kind": "home", "value": "back"})
     set_tiles(tiles, status="Quick phrases")
+
+
+# ---------- answering a text that came in ----------
+
+async def show_text_replies():
+    inc = S.incoming
+    S.mode, S.status, S.tiles = "thinking", f'Answering {inc["from"]}...', []
+    await broadcast()
+    replies, ms, ok = await brain.suggest_text_replies(S.history, inc["from"], inc["text"], S.texts_seen)
+    S.stats.update(latency_ms=ms, bonsai_ok=ok)
+    S.texts_seen += replies
+    tiles = [{"label": r, "kind": "textreply", "value": r} for r in replies]
+    tiles.append({"label": "Other answers", "kind": "textmore"})
+    tiles.append({"label": "Not now", "kind": "textskip"})
+    set_tiles(tiles, status=f'Text {inc["from"]} back')
+
+
+async def send_text(who, text):
+    """Open Messages, open the chat, type the answer, then ask before sending.
+    One pick does what would otherwise be four steps. If anything is not where it is
+    expected, hand over to the normal step-by-step tiles instead of guessing."""
+    start_task()
+    S.in_computer = True
+    S.goal = {"goal": f"reply to {who}'s text", "app": "Messages"}
+
+    def find(pred):
+        return next((e for e in S.screen.get("elements", []) if pred(e)), None)
+
+    def box_for(person):
+        return find(lambda e: e["role"] in sidecar.TYPEABLE and e["label"].startswith("Message ")
+                    and person.lower() in e["label"].lower())
+
+    async def step(status, action, done):
+        S.mode, S.status, S.tiles = "thinking", status, []
+        await broadcast()
+        res = await sidecar.act(action)
+        if not res.get("ok"):
+            raise RuntimeError(res.get("error", "that didn't work"))
+        S.done.append(done)
+        await asyncio.sleep(0.4)
+        S.screen = await sidecar.screen()
+
+    try:
+        S.mode, S.status, S.tiles = "thinking", "Reading the screen...", []
+        await broadcast()
+        S.screen = await sidecar.screen()
+        if S.screen.get("app") != "Messages":
+            await step("Opening Messages...", {"type": "open_app", "name": "Messages"}, "Opened Messages")
+        if not box_for(who):
+            back = find(lambda e: e["label"] == "Back to conversations")
+            if back:   # another chat is open
+                await step("Finding the chat...", {"type": "press", "id": back["id"]}, 'Pressed "Back to conversations"')
+            row = find(lambda e: e["role"] not in sidecar.TYPEABLE and e["label"].lower() == who.lower()) \
+                or find(lambda e: e["role"] not in sidecar.TYPEABLE and e["label"].lower().startswith(who.lower()))
+            if not row:
+                raise LookupError(f"no chat with {who} on screen")
+            await step(f"Opening {who}'s chat...", {"type": "press", "id": row["id"]}, f'Pressed "{row["label"]}"')
+        box = box_for(who)
+        if not box:
+            raise LookupError("no message box")
+        await step("Writing...", {"type": "type", "id": box["id"], "text": text},
+                   f'Typed "{text}" into "{box["label"].split(":")[0]}"')
+        S.drafts_seen.append(text)
+        send = find(lambda e: e["role"] not in sidecar.TYPEABLE and "send" in e["label"].lower())
+        if not send:
+            raise LookupError("no Send control")
+        await ask_to_confirm({"type": "press", "id": send["id"], "label": send["label"]})
+    except Exception as e:
+        print(f"[text] couldn't do it in one go: {e!r}")
+        await show_actions(note="Pick the next step")
 
 
 # ---------- computer mode ----------
@@ -285,6 +372,29 @@ def confirm_question(action):
     return f'{action["label"]}?'
 
 
+def draft_on_screen() -> dict | None:
+    """The message that is typed and about to go out: {"to", "text"}."""
+    box = next((e for e in S.screen.get("elements", [])
+                if e["role"] in sidecar.TYPEABLE and e.get("value")), None)
+    if not box:
+        return None
+    label = box["label"]
+    who = label[len("Message "):].split(":")[0].strip() if label.startswith("Message ") else ""
+    return {"to": who, "text": box["value"]}
+
+
+async def ask_to_confirm(action):
+    """Anything that sends, posts or deletes: say exactly what will happen and wait for Yes."""
+    S.pending = action
+    S.sending = draft_on_screen() if "send" in action["label"].lower() else None
+    set_tiles([{"label": "Yes, do it", "kind": "confirm", "value": True},
+               {"label": "No", "kind": "confirm", "value": False}],
+              mode="computer", status=confirm_question(action))
+    S.index = 1   # highlight "No": a stray smile must never send something
+    await broadcast()
+    await speak(S.status)
+
+
 def describe(action):
     """One line for the "already done" list Bonsai sees on the next step."""
     if action["type"] == "type":
@@ -311,7 +421,13 @@ async def run_action(action, finish=False):
     if action["type"] == "type":
         S.drafts_seen.append(action["text"])
     if finish:
-        go_listen(status="Done")
+        sent = S.sending
+        S.sending = None
+        if sent:   # remember what was texted to whom: context for later replies, and shown on screen
+            S.history.append({"who": "me_text", "to": sent["to"], "text": sent["text"]})
+            if S.incoming and S.incoming["from"].lower() == sent["to"].lower():
+                S.incoming = None
+        go_listen(status="Sent" if sent else "Done")
         return
     await asyncio.sleep(0.4)   # let the app update before reading it again
     await show_actions()
@@ -327,7 +443,10 @@ async def handle(gesture):
 
     if S.mode == "listen":
         if gesture == "nod":
-            await show_replies()
+            if text_waiting():
+                await show_text_replies()
+            else:
+                await show_replies()
         elif gesture == "cancel":
             set_tiles(HOME_TILES, mode="choose", status="Menu")
         return
@@ -375,17 +494,18 @@ async def pick(tile):
     elif k == "action":
         action = tile["value"]
         if is_risky(action):
-            S.pending = action
-            set_tiles([{"label": "Yes, do it", "kind": "confirm", "value": True},
-                       {"label": "No", "kind": "confirm", "value": False}],
-                      mode="computer", status=confirm_question(action))
-            S.index = 1   # highlight "No": a stray smile must never send something
-            await broadcast()
-            await speak(S.status)
+            await ask_to_confirm(action)
         else:
             await run_action(action)
     elif k == "phrases":
         show_phrases(tile["value"])
+    elif k == "textreply":
+        await send_text(S.incoming["from"], tile["value"])
+    elif k == "textmore":
+        await show_text_replies()
+    elif k == "textskip":
+        S.incoming = None
+        go_listen()
     elif k == "redraft":
         await show_drafts(tile["value"])
     elif k == "confirm":
@@ -426,11 +546,32 @@ async def heard(h: Heard):
         S.partial = text
     elif text:
         S.partial = ""
-        S.history.append({"who": "friend", "text": text})
+        S.history.append({"who": "friend", "text": text, "at": time.time()})
         S.pregen = None
         if S.pregen_task:
             S.pregen_task.cancel()
         S.pregen_task = asyncio.create_task(pregenerate(len(S.history)))
+    await broadcast()
+    return {"ok": True}
+
+
+@app.post("/incoming")
+async def incoming(body: dict):
+    """The sidecar saw a new text message arrive. The next nod offers answers to it."""
+    who = str(body.get("from") or body.get("sender") or "").strip()
+    text = str(body.get("text") or "").strip()
+    if not who or not text:
+        return {"ok": False, "error": "need from and text"}
+    last = next((t for t in reversed(S.history) if t["who"] == "text"), None)
+    if last and last.get("from") == who and last["text"] == text:
+        return {"ok": True, "duplicate": True}
+    S.incoming = {"from": who, "text": text, "at": time.time()}
+    S.texts_seen = []
+    S.history.append({"who": "text", "from": who, "text": text})
+    if config.MOCK_SIDECAR:
+        sidecar.FAKE.received[who] = text
+    if S.mode == "listen":
+        go_listen()
     await broadcast()
     return {"ok": True}
 
@@ -456,10 +597,13 @@ async def ws_endpoint(ws: WebSocket):
                 asyncio.create_task(on_gesture(msg["name"]))
             elif msg.get("type") == "heard":   # dev box: type what the friend said
                 await heard(Heard(text=msg.get("text", ""), final=True))
+            elif msg.get("type") == "incoming":   # dev box: "/text Andrew: where are you"
+                await incoming({"from": msg.get("from", ""), "text": msg.get("text", "")})
             elif msg.get("type") == "recalibrate":
                 await recalibrate()
             elif msg.get("type") == "reset":
                 S.history.clear()
+                S.incoming, S.pregen = None, None
                 sidecar.FAKE.reset()
                 go_listen()
                 await broadcast()

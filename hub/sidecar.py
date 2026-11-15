@@ -22,11 +22,15 @@ class FakeMac:
         self.draft = ""
         self.sent = []        # (person, text)
         self.page = "home"    # Safari page
+        self.received = {}    # person -> the last text they sent that hasn't been answered
 
     def screen(self) -> dict:
         if self.app == "Messages" and self.chat:
+            # like the real sidecar: an unanswered text is mentioned in the box's label
+            asked = self.received.get(self.chat)
+            box = f"Message {self.chat}" + (f": your answer to {self.chat}, who asked you '{asked}'" if asked else "")
             els = [("button", "Back to conversations"),
-                   ("textfield", f"Message {self.chat}", self.draft),
+                   ("textfield", box, self.draft),
                    ("button", "Send"),
                    ("button", f"Call {self.chat}")]
         elif self.app == "Messages":
@@ -73,6 +77,7 @@ class FakeMac:
             if not self.draft:
                 return {"ok": False, "error": "nothing to send"}
             self.sent.append((self.chat, self.draft))
+            self.received.pop(self.chat, None)
             print(f"[fake mac] SENT to {self.chat}: {self.draft}")
             self.draft = ""
         elif label.startswith("Yankees vs"):

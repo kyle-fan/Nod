@@ -43,9 +43,14 @@ def _history_text(history: list[dict], name: str) -> str:
     if not history:
         return "(nothing yet)"
     turns = history[-config.HISTORY_TURNS:]
-    return "\n".join(
-        f"{name if t['who'] == 'me' else 'Friend'}: {t['text']}" for t in turns
-    )
+
+    def line(t):
+        if t["who"] == "text":       # a text message that came in
+            return f'({t.get("from", "Someone")} texted {name}: "{t["text"]}")'
+        if t["who"] == "me_text":    # a text he sent
+            return f'({name} texted {t.get("to", "someone")}: "{t["text"]}")'
+        return f"{name if t['who'] == 'me' else 'Friend'}: {t['text']}"
+    return "\n".join(line(t) for t in turns)
 
 
 SPLIT = "\n=====\n"
@@ -95,7 +100,7 @@ INTENT_SCHEMA = {
 
 # Each kind of prompt keeps its own llama-server slot when the server has several (-np 4),
 # so the long fixed part of that prompt stays cached between calls. With one slot it still works.
-SLOTS = {"reply": 0, "task": 1, "actions": 2, "message": 3, "intent": 0}
+SLOTS = {"reply": 0, "task": 1, "actions": 2, "message": 3, "intent": 0, "textreply": 3}
 
 
 async def _chat(prompt: tuple[str, str] | str, max_tokens: int = 220, schema: dict | None = None,
@@ -193,6 +198,29 @@ async def suggest_replies(history: list[dict], kind: str | None = None,
         replies, ok = ["Yes", "No", "Give me a second"], False
     ms = int((time.perf_counter() - t0) * 1000)
     return (replies + ["Yes", "No", "Hmm"])[:3], ms, ok
+
+
+async def suggest_text_replies(history: list[dict], who: str, text: str,
+                               avoid: list[str] | None = None) -> tuple[list[str], int, bool]:
+    """3 answers to a text message that just came in. Returns (replies, ms, ok)."""
+    p = load_profile()
+    spoken = [t for t in history if t["who"] in ("friend", "me")][-4:]
+    prompt = _prompt("textreply.txt", name=p["name"], profile=_profile_text(p), style=_style_text(p),
+                     history=_history_text(spoken, p["name"]), who=who, text=text.replace('"', "'"),
+                     avoid=("You already passed on these, so write different ones: "
+                            + "; ".join(avoid) + "\n") if avoid else "")
+    t0 = time.perf_counter()
+    try:
+        out = await _chat(prompt, max_tokens=120, schema=REPLY_SCHEMA, slot="textreply")
+        low = {a.lower() for a in avoid or []}
+        replies = [r for r in dict.fromkeys(str(x).strip() for x in _parse_json(out, "replies"))
+                   if r and r.lower() not in low]
+        ok = bool(replies)
+    except Exception as e:
+        print(f"[brain] Bonsai error: {e}")
+        replies, ok = [], False
+    ms = int((time.perf_counter() - t0) * 1000)
+    return (replies + ["yeah", "not right now", "give me a minute"])[:3], ms, ok
 
 
 async def suggest_intents(history: list[dict], path: list[str], rejected: list[str],

@@ -49,6 +49,11 @@
   .line.me { align-self:flex-end; border-radius:16px 16px 5px 16px; background:rgba(255,216,74,.09);
              border-color:rgba(255,216,74,.22); color:#e9dfbd; }
   .line.me::before { content:"You"; color:var(--star); }
+  /* text messages: blue, labelled with who they are from or to */
+  .line[data-who]::before { content:attr(data-who); color:#8fd3ff; }
+  .line.text { background:rgba(96,165,250,.10); border-color:rgba(96,165,250,.28); color:#cfe3ff; }
+  .line.me_text { align-self:flex-end; border-radius:16px 16px 5px 16px; background:rgba(96,165,250,.16);
+                  border-color:rgba(96,165,250,.34); color:#dbeafe; }
   .line.latest { font-size:32px; line-height:1.25; color:var(--text); font-weight:600; padding:12px 20px; }
   .line.partial { font-size:22px; color:var(--dim); font-style:italic; border-style:dashed; }
   .line.partial::before { content:"hearing"; font-style:normal; color:#8fd3ff; }
@@ -118,6 +123,7 @@
   #caption.show { opacity:1; }
   #caption b { font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase; margin-right:10px;
                font-weight:700; vertical-align:middle; }
+  #caption.textin b { color:#93c5fd; } #caption.textin { border-color:rgba(96,165,250,.6) !important; }
   #caption.hearing b { color:#8fd3ff; } #caption.heard b { color:#7dffb0; } #caption.said b { color:var(--star); }
   #caption.hearing { font-style:italic; font-weight:500; }
 
@@ -201,7 +207,7 @@
 </div>
 
 <footer id="dev">
-  <input id="say" placeholder="Dev: type what the friend said, press Enter   (keys: N nod · ← → move · Space pick · Esc back · C recalibrate camera · D hide this bar)">
+  <input id="say" placeholder="Dev: type what the friend said, press Enter. Or: /text Andrew: where are you   (keys: N nod · ← → move · Space pick · Esc back · C recalibrate camera · D hide this bar)">
   <button id="reset">Reset</button>
   <button id="hide">Hide (D)</button>
 </footer>
@@ -269,6 +275,8 @@ function render(s) {
     lastCaption = capKey;
     if (s.partial) caption("hearing", "hearing", s.partial, true);
     else if (last?.who === "friend") caption("heard", "heard", last.text, false);
+    else if (last?.who === "text") caption("textin", `text from ${esc(last.from)}`, last.text, true);
+    else if (last?.who === "me_text") caption("said", `sent to ${esc(last.to)}`, last.text, false);
     else if (last) caption("said", "you said", last.text, false);
     else $("caption").classList.remove("show");
   }
@@ -302,8 +310,11 @@ function render(s) {
     lastConvo = convoKey;
     const recent = s.history.slice(-6);
     $("convo").innerHTML = (recent.length || s.partial ? "" : WELCOME)
-      + recent.map((t, i) =>
-        `<div class="line ${t.who}${i === recent.length - 1 ? " latest" : ""}">${esc(t.text)}</div>`).join("")
+      + recent.map((t, i) => {
+          const who = t.who === "text" ? ` data-who="${esc(t.from)} · text message"`
+                    : t.who === "me_text" ? ` data-who="You · texted ${esc(t.to)}"` : "";
+          return `<div class="line ${t.who}${i === recent.length - 1 ? " latest" : ""}"${who}>${esc(t.text)}</div>`;
+        }).join("")
       + (s.partial ? `<div class="line friend partial">${esc(s.partial)}</div>` : "");
   }
 
@@ -315,12 +326,13 @@ function render(s) {
       ? '<div class="tile glass skel"></div>'.repeat(4)
       : s.tiles.map(t => {
           const firstDone = t.kind === "done" && s.tiles[0] === t && s.tiles.length > 1;
-          const meta = ["more", "else", "done", "home", "kind", "phrases", "redraft"].includes(t.kind) && !firstDone ? " meta" : "";
+          const meta = ["more", "else", "done", "home", "kind", "phrases", "redraft", "textmore", "textskip"].includes(t.kind) && !firstDone ? " meta" : "";
           const yes = (t.kind === "confirm" && t.value ? " yes" : "") + (firstDone ? " first-done" : "");
           const len = t.label.length > 60 ? " xlong" : t.label.length > 34 ? " long" : "";
           // computer steps say exactly what will happen: press this, type that, open that
           const a = t.kind === "action" ? t.value : null;
           const cap = t.kind === "redraft" ? '<span class="cap">rewrite</span>'
+            : t.kind === "textreply" ? '<span class="cap">text back</span>'
             : t.kind === "confirm" && t.value ? '<span class="cap">this sends it</span>'
             : a ? `<span class="cap">${{press: "press", type: "type", open_app: "open"}[a.type] || ""}</span>` : "";
           const text = a && a.type === "type" ? `“${esc(a.text)}”` : a && a.type === "open_app" ? esc(a.name) : esc(t.label);
@@ -347,7 +359,10 @@ function send(msg) { if (ws?.readyState === 1) ws.send(JSON.stringify(msg)); }
 document.addEventListener("keydown", e => {
   if (document.activeElement === $("say")) {
     if (e.key === "Enter" && $("say").value.trim()) {
-      send({type: "heard", text: $("say").value});
+      // "/text Andrew: where are you" pretends a text message arrived (for rehearsing)
+      const m = $("say").value.match(/^\/text\s+([^:]+):\s*(.+)$/i);
+      if (m) send({type: "incoming", from: m[1].trim(), text: m[2].trim()});
+      else send({type: "heard", text: $("say").value});
       $("say").value = "";
       $("say").blur();   // so N / arrows / Space work right away
     }

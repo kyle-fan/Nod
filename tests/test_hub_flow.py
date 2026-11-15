@@ -31,6 +31,11 @@ async def fake_chat(prompt, max_tokens=220, schema=None, slot=None):
         return json.dumps({"replies": ["yeah one sec", "what time", "nah"]})
     if slot == "intent":
         return json.dumps({"question": "In or out?", "options": ["Say yes", "Say no", "Ask when"]})
+    if slot == "textreply":
+        assert 'just texted you: "where are you"' in user, user
+        n = len(re.findall(r"already passed on", user))
+        return json.dumps({"replies": ["in my room", "why", "be there soon"] if not n
+                           else ["at the dorm", "who's asking", "one minute"]})
     if slot == "message":
         return json.dumps({"replies": ["come back", "you coming", "game's starting"]})
     if slot == "actions":
@@ -77,7 +82,7 @@ async def fresh(app="Messages"):
     config.MOCK_APP = app
     sidecar.FAKE.reset()
     S.history.clear()
-    S.pregen = None
+    S.pregen, S.incoming, S.texts_seen = None, None, []
     main.go_listen()
     SPOKEN.clear()
     CALLS.clear()
@@ -101,7 +106,7 @@ async def test_talk_turn():
     assert "then" not in S.tiles[0]
     await g("right", "select")
     assert SPOKEN == ["what time"] and S.mode == "listen"
-    assert S.history[-1] == {"who": "me", "text": "what time"}
+    assert (S.history[-1]["who"], S.history[-1]["text"]) == ("me", "what time")
 
 
 async def test_texting_chain_sends_after_confirmation():
@@ -122,7 +127,8 @@ async def test_texting_chain_sends_after_confirmation():
     assert sidecar.FAKE.sent == []
     await g("left", "select")
     assert sidecar.FAKE.sent == [("Andrew", "come back")]
-    assert S.mode == "listen" and S.status == "Done"
+    assert S.mode == "listen" and S.status == "Sent"
+    assert S.history[-1] == {"who": "me_text", "to": "Andrew", "text": "come back"}
 
 
 async def test_no_at_confirmation_sends_nothing():
@@ -173,6 +179,66 @@ async def test_more_wordings():
     await g(*["right"] * i, "select")
     assert S.status == "Pick the wording" and labels()[-1] == "More wordings"
     assert "come back" not in labels(), "the wording already typed is not offered again"
+
+
+async def text_arrives(who="Andrew", text="where are you"):
+    return await main.incoming({"from": who, "text": text})
+
+
+async def test_incoming_text_is_answered_in_one_pick():
+    await fresh(app="Safari")
+    assert (await text_arrives())["ok"]
+    assert S.status == "Andrew texted you. Nod to answer" and S.view()["incoming"]["from"] == "Andrew"
+    await g("nod")
+    assert S.status == "Text Andrew back", S.status
+    assert labels() == ["in my room", "why", "be there soon", "Other answers", "Not now"], labels()
+    await g("select")
+    # one pick opened Messages, opened Andrew's chat and typed the answer; now it asks
+    assert S.status == 'Send "in my room" to Andrew?', S.status
+    assert labels() == ["Yes, do it", "No"] and S.index == 1
+    assert sidecar.FAKE.sent == [] and sidecar.FAKE.app == "Messages" and sidecar.FAKE.draft == "in my room"
+    assert S.view()["task"]["done"] == ['Opened Messages', 'Pressed "Andrew"', 'Typed "in my room" into "Message Andrew"']
+    await g("left", "select")
+    assert sidecar.FAKE.sent == [("Andrew", "in my room")]
+    assert S.mode == "listen" and S.status == "Sent" and S.incoming is None
+    assert S.history[-2:] == [{"who": "text", "from": "Andrew", "text": "where are you"},
+                              {"who": "me_text", "to": "Andrew", "text": "in my room"}]
+    await g("nod")                                     # answered: a nod is a normal talk turn again
+    assert labels()[-1] == "More..."
+
+
+async def test_incoming_text_other_answers_and_not_now():
+    await fresh()
+    await text_arrives()
+    await g("nod", "right", "right", "right", "select")          # Other answers
+    assert labels()[:3] == ["at the dorm", "who's asking", "one minute"], labels()
+    await g("right", "right", "right", "right", "select")        # Not now
+    assert S.mode == "listen" and S.incoming is None and S.status == "Listening"
+    assert sidecar.FAKE.sent == []
+
+
+async def test_same_text_reported_twice_counts_once():
+    await fresh()
+    await text_arrives()
+    assert (await text_arrives()).get("duplicate")
+    assert sum(1 for t in S.history if t["who"] == "text") == 1
+
+
+async def test_talking_after_a_text_goes_back_to_talk_replies():
+    await fresh()
+    await text_arrives()
+    await friend("want to grab food")
+    await g("nod")
+    assert labels() == ["yeah one sec", "what time", "nah", "More..."]
+
+
+async def test_text_from_unknown_chat_falls_back_to_steps():
+    await fresh()
+    await text_arrives(who="Coach", text="where are you")
+    await g("nod", "select")
+    # there is no chat called Coach on the pretend Mac: it hands over to step-by-step tiles
+    assert S.mode == "computer" and S.status == "Pick the next step", (S.mode, S.status)
+    assert sidecar.FAKE.sent == []
 
 
 async def test_quick_phrases_need_no_model():
