@@ -139,10 +139,26 @@ def set_tiles(tiles, mode="choose", status="Choose"):
 
 def go_listen(status="Listening"):
     S.mode, S.status, S.tiles, S.index, S.in_computer, S.pending = "listen", status, [], 0, False, None
+    if status != "Listening":
+        # "Sent", "Done" or a problem: show it for a few seconds, then back to plain listening
+        try:
+            asyncio.get_running_loop().create_task(settle(status))
+        except RuntimeError:
+            pass
     if status == "Listening" and S.paused:
         S.status = "Not listening. Nod to listen again"
     elif status == "Listening" and text_waiting():
         S.status = f'{S.incoming["from"]} texted you. Nod to answer'
+
+
+SETTLE_S = 5.0
+
+
+async def settle(status):
+    await asyncio.sleep(SETTLE_S)
+    if S.mode == "listen" and S.status == status and not lock.locked():
+        go_listen()
+        await broadcast()
 
 
 INCOMING_FRESH_S = 180   # an unanswered text is offered on the next nod for this long

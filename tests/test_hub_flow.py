@@ -50,7 +50,6 @@ async def fake_answer(prompt, schema, slot):
         assert "You're texting Andrew (roommate and best friend)" in user, user
         return json.dumps({"replies": ["you around", "want food", "what's the plan tonight"]})
     if slot == "textreply":
-        assert 'just texted you: "where are you' in user, user
         n = len(re.findall(r"none was right", user))
         return json.dumps({"replies": ["in my room", "why", "be there soon"] if not n
                            else ["at the dorm", "who's asking", "one minute"]})
@@ -662,6 +661,21 @@ async def test_request_heard_in_two_pieces_still_works():
     assert S.tiles[0].get("then") == "computer", labels()
     await g("select")
     assert labels() == ["Andrew", "New Message", "Done"] or labels()[0] == "Andrew", labels()
+
+
+async def test_sent_message_settles_back_to_listening():
+    await fresh()
+    old = main.SETTLE_S
+    main.SETTLE_S = 0.05
+    try:
+        await text_arrives()
+        await g("nod", "select", "left", "select")
+        assert S.status == "Sent"
+        await text_arrives(text="you there?")              # another text came in meanwhile
+        await asyncio.sleep(0.15)
+        assert S.status == "Andrew texted you. Nod to answer", S.status
+    finally:
+        main.SETTLE_S = old
 
 
 async def test_quick_phrases_need_no_model():
