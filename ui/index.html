@@ -300,7 +300,7 @@ function render(s) {
   else if (cam.on && !cam.face) al.push(["", "Can't see your face: check the camera and lighting"]);
   if (!s.stats.bonsai_ok) al.push(["", "Bonsai is offline: showing basic replies"]);
   if (s.paused) al.push(["info", "Not listening: nothing said is being kept"]);
-  if (s.stats.sidecar_ok === false) al.push(["bad", "Voice helper is not answering"]);
+  if (s.stats.sidecar_ok === false) al.push(["bad", "Voice helper is not answering yet (it takes a few seconds to load)"]);
   $("alerts").innerHTML = al.map(([c, t]) => `<span class="alert ${c}">${esc(t)}</span>`).join("");
 
   // task line: the goal and the steps done so far

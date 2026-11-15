@@ -955,6 +955,21 @@ async def put_stale_tiles_away():
             await broadcast()
 
 
+async def watch_sidecar():
+    """Keep the "voice helper is not answering" alert truthful: it shows while the helper is
+    still loading its models at start-up, and if it ever goes away."""
+    while True:
+        try:
+            async with httpx.AsyncClient(timeout=1.5) as c:
+                ok = (await c.get(config.SIDECAR_URL + "/health")).status_code == 200
+        except Exception:
+            ok = False
+        if ok != S.stats.get("sidecar_ok") and S.mode != "speaking":
+            S.stats["sidecar_ok"] = ok
+            await broadcast()
+        await asyncio.sleep(3)
+
+
 async def watch_camera():
     """Tell the screen when the camera loses the face or is learning the neutral pose."""
     while True:
@@ -968,6 +983,8 @@ async def watch_camera():
 @app.on_event("startup")
 async def startup():
     asyncio.create_task(put_stale_tiles_away())
+    if not config.MOCK_SIDECAR:
+        asyncio.create_task(watch_sidecar())
     if config.USE_CAMERA:
         from .face import GestureDetector
         loop = asyncio.get_running_loop()
