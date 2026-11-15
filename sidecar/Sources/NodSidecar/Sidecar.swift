@@ -160,6 +160,35 @@ func runSidecar() async throws {
         return json(["ok": true, "overlay": on])
     }
 
+    // Tell the hub when a text message arrives, so the next nod can answer it.
+    // Off unless NOD_WATCH_MESSAGES=1: it reads the Messages window every few seconds.
+    if env["NOD_WATCH_MESSAGES"] == "1" {
+        let incomingURL = hubURL.deletingLastPathComponent().appending(path: "incoming")
+        log("watching Messages for new texts")
+        Task {
+            var seen: Set<String>? = nil     // nil until the first look: what is already there is not news
+            while !Task.isCancelled {
+                let texts = hands.unansweredTexts()
+                let keys = Set(texts.map { "\($0.from)|\($0.text)" })
+                if let old = seen {
+                    for t in texts where !old.contains("\(t.from)|\(t.text)") {
+                        var request = URLRequest(url: incomingURL)
+                        request.httpMethod = "POST"
+                        request.timeoutInterval = 2
+                        request.setValue("application/json", forHTTPHeaderField: "content-type")
+                        request.httpBody = try? JSONSerialization.data(withJSONObject: ["from": t.from, "text": t.text])
+                        _ = try? await URLSession.shared.data(for: request)
+                        log("text from \(t.from) passed to the hub")
+                    }
+                    seen = old.union(keys)
+                } else if Hands.trusted {
+                    seen = keys
+                }
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+            }
+        }
+    }
+
     // Debug: what a transcript would be corrected to, e.g. /names?text=tell%20Kayden%20Ron
     await server.appendRoute("GET /names") { request in
         let text = (request.query.first(where: { $0.name == "text" })?.value ?? "").replacingOccurrences(of: "+", with: " ")

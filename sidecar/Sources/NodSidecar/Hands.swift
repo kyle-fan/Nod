@@ -388,6 +388,34 @@ final class Hands: @unchecked Sendable {
         }
     }
 
+    /// Texts that have come in and not been read or answered, for the hub's "X texted you".
+    /// Two sources: sidebar rows marked Unread ("Name, Unread, preview, time"), and the newest
+    /// bubble of the open chat when the other person wrote it.
+    func unansweredTexts() -> [(from: String, text: String)] {
+        guard Hands.trusted, let app = NSWorkspace.shared.runningApplications.first(where: {
+            $0.bundleIdentifier == "com.apple.MobileSMS" }) else { return [] }
+        let appEl = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(appEl, 1.0)
+        guard let win = (attr(appEl, kAXMainWindowAttribute) as! AXUIElement?)
+            ?? (attr(appEl, kAXWindowsAttribute) as? [AXUIElement])?.first else { return [] }
+        var out: [(from: String, text: String)] = []
+        var budget = 800
+        if let list = find(identifier: "ConversationList", in: win, budget: &budget) {
+            for row in children(list).prefix(40) {
+                guard let desc = string(row, kAXDescriptionAttribute) else { continue }
+                let parts = desc.components(separatedBy: ", ")
+                guard parts.count >= 4, let flag = parts.firstIndex(of: "Unread"), flag >= 1 else { continue }
+                let preview = parts[(flag + 1)..<(parts.count - 1)].joined(separator: ", ")
+                if !preview.isEmpty { out.append((parts[0].trimmingCharacters(in: .whitespaces), preview)) }
+            }
+        }
+        if let name = string(win, kAXTitleAttribute), let text = lastReceivedText(in: win),
+           !out.contains(where: { $0.from == name }) {
+            out.append((name, text))
+        }
+        return out
+    }
+
     // MARK: /act
 
     func act(_ action: [String: Any]) async -> [String: Any] {
