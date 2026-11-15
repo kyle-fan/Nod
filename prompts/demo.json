@@ -40,6 +40,8 @@
   ],
 
   "pass_on": [
+    {"name": "text me when you want to meet", "any": ["meet", "what time", "when you want", "when to"],
+     "say": ["want to meet at 6 pm?", "let's meet at 6 for the game", "meet at my place at 6?"]},
     {"name": "thai for lunch", "all": ["thai"],
      "say": ["we're getting thai for lunch", "getting thai, want to come", "thai for lunch, you in"]},
     {"name": "pizza for lunch", "all": ["pizza"],
