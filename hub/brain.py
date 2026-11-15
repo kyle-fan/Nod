@@ -253,7 +253,12 @@ async def computer_task(history: list[dict]) -> bool:
         return False
     p = load_profile()
     try:
-        out = await _chat(_prompt("task.txt", name=p["name"], history=_history_text(history[-4:], p["name"])),
+        # a request split in two by a pause is classified as the one line it was
+        merged = list(history)
+        while merged and merged[-1]["who"] == "friend":
+            merged.pop()
+        merged.append({"who": "friend", "text": friend_said(history)})
+        out = await _chat(_prompt("task.txt", name=p["name"], history=_history_text(merged[-4:], p["name"])),
                           max_tokens=20, schema=TASK_SCHEMA, slot="task")
         return json.loads(out).get("task") in ("message", "computer")
     except Exception as e:

@@ -38,8 +38,8 @@ async def fake_answer(prompt, schema, slot):
                                      {"goal": "put the yankees game on", "app": "Safari"},
                                      {"goal": "look up the score", "app": "Safari"}]})
     if slot == "task":
-        last = user.strip().splitlines()[-4:]
-        text = " ".join(last).lower()
+        said = [l for l in user.splitlines() if l.startswith("Friend: ")]
+        text = (said[-1] if said else "").lower()
         return json.dumps({"task": "message" if ("tell " in text or "text " in text) else
                            "computer" if "put " in text else "none"})
     if slot == "reply":
