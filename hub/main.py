@@ -411,7 +411,7 @@ def express_recipient() -> str | None:
     """With EXPRESS=1: the person in his profile that the friend just asked him to text."""
     if not config.EXPRESS:
         return None
-    asked = next((t["text"].lower() for t in reversed(S.history[:-1]) if t["who"] == "friend"), "")
+    asked = brain.friend_said(S.history).lower()
     import re
     if not re.search(r"\b(tell|ask|text|let|remind|message)\b", asked):
         return None

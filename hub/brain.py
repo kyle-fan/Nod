@@ -40,6 +40,22 @@ def _examples_text(p: dict) -> str:
     ) or "(none)"
 
 
+def friend_said(history: list[dict]) -> str:
+    """What the friend last said, in full. Speech arrives a sentence at a time and a pause can
+    split one request in two ("can you tell Andrew" / "to come back"), so the friend lines in
+    a row at the end of the conversation are read together."""
+    lines = []
+    for t in reversed(history):
+        if t["who"] == "friend":
+            lines.append(t["text"])
+            if len(lines) == 3:
+                break
+        elif lines:
+            break          # an earlier turn
+        # his own lines after the request ("one sec") are skipped
+    return " ".join(reversed(lines))
+
+
 def load_learned() -> list[dict]:
     try:
         return json.loads(config.LEARNED_PATH.read_text(encoding="utf-8"))
@@ -334,7 +350,7 @@ async def suggest_new_texts(history: list[dict], who: str,
     relation = p.get("people", {}).get(who, "")
     # The friend just asked him to tell or ask this person something: the messages are
     # wordings of that request (the same prompt the step-by-step route uses).
-    asked = next((t["text"] for t in reversed(history[-3:]) if t["who"] == "friend"), "")
+    asked = friend_said(history[-4:])
     if who.lower() in asked.lower() and re.search(r"\b(tell|ask|text|let|remind|message)\b", asked.lower()):
         t0 = time.perf_counter()
         try:
@@ -606,7 +622,7 @@ def _shortlist(elements: list[dict], history: list[dict], goal: str) -> list[dic
     things, and anything the friend or the goal names, wherever it is on the screen."""
     if len(elements) <= MAX_LISTED:
         return elements
-    said = next((t["text"].lower() for t in reversed(history) if t["who"] == "friend"), "")
+    said = friend_said(history).lower()
     words = {w for w in re.findall(r"[a-z0-9']+", said + " " + goal.lower()) if len(w) > 2}
     keep = []
     for i, e in enumerate(elements):
@@ -626,7 +642,7 @@ def _shortlist(elements: list[dict], history: list[dict], goal: str) -> list[dic
 def _named_on_screen(history: list[dict], elements: list[dict]) -> dict | None:
     """The one pressable thing on screen whose label the friend said out loud ("tell mom ..."
     with a "Mom" row showing). None if they named nobody on screen, or more than one."""
-    said = next((t["text"].lower() for t in reversed(history) if t["who"] == "friend"), "")
+    said = friend_said(history).lower()
     hits = []
     for e in elements:
         label = str(e["label"]).strip()
@@ -718,7 +734,7 @@ async def draft_actions(history: list[dict], screen: dict, field_id, goal: str,
     # comes from the friend's actual words in the conversation.
     who = _goal_person(goal)
     label = field["label"]
-    asked = next((t["text"].lower() for t in reversed(history) if t["who"] == "friend"), "")
+    asked = friend_said(history).lower()
     answering = bool(re.search(r"\b(reply|replying|respond|answer|write back|text (him|her|them) back)\b",
                                goal.lower() + " | " + asked))
     if not answering:

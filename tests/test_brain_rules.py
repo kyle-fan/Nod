@@ -89,6 +89,17 @@ def test_long_screens_are_cut_down_but_keep_what_was_named():
     assert "Yankees vs Red Sox: watch live" in labels and "Play" in labels and "Address" in labels, labels
 
 
+def test_a_request_split_by_a_pause_is_read_as_one():
+    h = [{"who": "friend", "text": "hey"}, {"who": "me", "text": "hey"},
+         {"who": "friend", "text": "Can you tell Andrew"}, {"who": "friend", "text": "to come back?"},
+         {"who": "me", "text": "one sec"}]
+    assert brain.friend_said(h) == "Can you tell Andrew to come back?"
+    assert brain._named_on_screen(h, LIST)["label"] == "Andrew"
+    assert brain.friend_said([]) == "" and brain.friend_said([{"who": "me", "text": "x"}]) == ""
+    # an older turn is not mixed in
+    assert brain.friend_said(h[:2] + [{"who": "friend", "text": "bye"}]) == "bye"
+
+
 def test_finished_rules():
     assert brain._looks_finished("put the yankees game on", ['Pressed "Yankees vs Red Sox"', 'Pressed "Play"'])
     assert not brain._looks_finished("put the yankees game on", ['Pressed "Yankees vs Red Sox"'])

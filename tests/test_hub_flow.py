@@ -654,6 +654,16 @@ async def test_bonsai_down_during_a_computer_step_says_so():
         brain._chat = old
 
 
+async def test_request_heard_in_two_pieces_still_works():
+    await fresh()
+    await friend("can you tell Andrew")
+    await friend("to come back")
+    await g("nod")
+    assert S.tiles[0].get("then") == "computer", labels()
+    await g("select")
+    assert labels() == ["Andrew", "New Message", "Done"] or labels()[0] == "Andrew", labels()
+
+
 async def test_quick_phrases_need_no_model():
     await fresh()
     CALLS.clear()
