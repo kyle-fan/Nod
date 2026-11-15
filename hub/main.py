@@ -454,7 +454,12 @@ async def show_actions(note=""):
     await broadcast()
     prepared, S.prepared = S.prepared, None
     try:
-        S.screen, (acts, ms, ok, info) = await (prepared or prepare_actions())
+        try:
+            S.screen, (acts, ms, ok, info) = await (prepared or prepare_actions())
+        except asyncio.CancelledError:
+            if not (prepared and prepared.cancelled()):
+                raise
+            S.screen, (acts, ms, ok, info) = await prepare_actions()   # the head start was dropped: do it now
     except Exception as e:   # sidecar down: say so instead of hanging
         print(f"[screen] failed: {e!r}")
         go_listen(status="Can't reach the Mac helper")
@@ -474,9 +479,12 @@ async def show_actions(note=""):
     if info.get("missing"):
         # the person the text is for has no chat on screen: never offer someone else's
         set_tiles([done], mode="computer", status=note or f'Can\'t see a chat with {info["missing"]} in Messages')
-    elif info.get("finished") or not tiles:
+    elif info.get("finished"):
         # Bonsai thinks the task is complete: "Done" comes first, one smile ends it.
         set_tiles([done] + tiles, mode="computer", status=note or "That looks done")
+    elif not tiles:
+        set_tiles([done], mode="computer",
+                  status=note or ("Nothing more to do here" if ok else "Bonsai didn't answer. Nod to try again"))
     else:
         set_tiles(tiles + [done], mode="computer", status=note or f"Computer · {app}")
 

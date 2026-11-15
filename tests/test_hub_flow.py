@@ -626,6 +626,34 @@ async def test_answering_a_text_on_the_real_macs_shapes():
         sidecar.FAKE = old
 
 
+async def test_a_dropped_head_start_is_redone_not_fatal():
+    await fresh()
+    await friend("can you tell Andrew to come back")
+    await asyncio.sleep(0.05)
+    S.prepared.cancel()                                  # something cancelled the prepared step
+    await asyncio.sleep(0)
+    await g("nod", "select")
+    assert S.mode == "computer" and labels()[0] == "Andrew", (S.mode, S.status, labels())
+
+
+async def test_bonsai_down_during_a_computer_step_says_so():
+    await fresh()
+    await friend("can you tell Andrew to come back")
+    await asyncio.sleep(0.05)
+    await g("nod")
+
+    async def down(*a, **k):
+        raise ConnectionError("no model")
+    old, brain._chat = brain._chat, down
+    S.prepared, S.prepared_for = None, -1              # no head start: the step is worked out now
+    try:
+        await g("select")
+        assert S.mode == "computer" and labels() == ["Done"], (S.mode, labels())
+        assert "Bonsai" in S.status, S.status
+    finally:
+        brain._chat = old
+
+
 async def test_quick_phrases_need_no_model():
     await fresh()
     CALLS.clear()
