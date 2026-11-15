@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Under the hood</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Live view for tuning and troubleshooting: what the camera reads against each gesture's
+     threshold, what the microphone hears, how long Bonsai takes, and what just happened. -->
+<style>
+  :root { --text:#e9edf5; --dim:#93a0b6; --line:#27324a; --ok:#6ee7b7; --warn:#fbbf24; --bad:#f87171; --star:#ffd84a; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:20px 26px; background:#0b0f18; color:var(--text); font:15px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; } h2 { font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); margin:0 0 10px; font-weight:600; }
+  p.lead { color:var(--dim); margin:0 0 18px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:16px; }
+  section { background:#121829; border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+  .row { display:grid; grid-template-columns:86px 1fr 70px; gap:10px; align-items:center; margin:9px 0; }
+  .row b { font-weight:600; } .row span { font-variant-numeric:tabular-nums; text-align:right; color:var(--dim); }
+  .bar { position:relative; height:16px; background:#0b1020; border-radius:8px; overflow:hidden; border:1px solid var(--line); }
+  .fill { position:absolute; top:0; bottom:0; background:#3b82f6; }
+  .fill.hit { background:var(--star); }
+  .mark { position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--bad); }
+  .mid { position:absolute; top:0; bottom:0; left:50%; width:1px; background:#44506b; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  td { padding:3px 6px; border-bottom:1px solid #1b2438; vertical-align:top; } td:first-child { color:var(--dim); white-space:nowrap; width:70px; }
+  .kind { font-family:ui-monospace, Menlo, monospace; font-size:12px; color:var(--star); white-space:nowrap; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:13px; font-weight:600; margin:0 6px 6px 0; background:#1b2438; }
+  .pill.ok { color:#062; background:var(--ok); } .pill.warn { color:#3a2a00; background:var(--warn); } .pill.bad { color:#300; background:var(--bad); }
+  .muted { color:var(--dim); }
+  #log { max-height:420px; overflow:auto; }
+</style>
+</head>
+<body>
+<h1>Under the hood</h1>
+<p class="lead">Live readings from this Mac. Nothing here leaves it. Keep this open next to Blink while tuning gestures or tracking down a problem.</p>
+<div class="grid">
+  <section><h2>Now</h2><div id="now"></div></section>
+  <section><h2>Face (what the camera reads, against each gesture's threshold)</h2><div id="face"></div></section>
+  <section><h2>Ears (microphone)</h2><div id="ears"></div></section>
+  <section><h2>Bonsai (most recent calls)</h2><div id="calls"></div></section>
+  <section style="grid-column:1 / -1"><h2>What just happened</h2><div id="log"></div></section>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = x => String(x).replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+const ago = (now, t) => { const s = now - t; return s < 60 ? s.toFixed(0) + " s ago" : (s / 60).toFixed(0) + " min ago"; };
+const pill = (cls, text) => `<span class="pill ${cls}">${esc(text)}</span>`;
+
+// a bar centred on zero: value and threshold in the same units; range is the half-width
+function centred(label, value, threshold, range, unit, hitBelow) {
+  const v = Math.max(-range, Math.min(range, value)), w = Math.abs(v) / range * 50;
+  const hit = hitBelow ? value < -threshold : Math.abs(value) > threshold;
+  const marks = hitBelow ? [50 - threshold / range * 50] : [50 - threshold / range * 50, 50 + threshold / range * 50];
+  return `<div class="row"><b>${label}</b><div class="bar"><div class="mid"></div>
+    <div class="fill ${hit ? "hit" : ""}" style="left:${v < 0 ? 50 - w : 50}%;width:${w}%"></div>
+    ${marks.map(m => `<div class="mark" style="left:${m}%"></div>`).join("")}</div>
+    <span>${value.toFixed(1)}${unit}</span></div>`;
+}
+function upward(label, value, threshold, range, unit) {
+  const w = Math.max(0, Math.min(range, value)) / range * 100;
+  return `<div class="row"><b>${label}</b><div class="bar"><div class="fill ${value > threshold ? "hit" : ""}" style="left:0;width:${w}%"></div>
+    <div class="mark" style="left:${threshold / range * 100}%"></div></div><span>${value.toFixed(2)}${unit}</span></div>`;
+}
+
+async function tick() {
+  let d;
+  try { d = await (await fetch("/debug.json")).json(); } catch (e) { $("now").innerHTML = pill("bad", "hub is not answering"); return; }
+  const cam = d.camera || {};
+  $("now").innerHTML = pill("", "mode: " + d.mode) + pill("", d.status)
+    + (cam.on ? (cam.error ? pill("bad", "camera not available") : cam.calibrating ? pill("warn", "learning neutral face")
+        : cam.face ? pill("ok", "face in view") : pill("warn", "no face in view")) : pill("", "camera off (keyboard)"))
+    + pill(d.settings.express ? "ok" : "", "express texts " + (d.settings.express ? "on" : "off"))
+    + pill(d.settings.learn ? "ok" : "", "learning " + (d.settings.learn ? "on" : "off"));
+
+  const g = d.gestures;
+  if (!g) $("face").innerHTML = '<p class="muted">The camera is off (USE_CAMERA=0), so gestures come from the keyboard.</p>';
+  else if (!g.reading) $("face").innerHTML = '<p class="muted">Waiting for a face and a neutral pose...</p>';
+  else {
+    const [p, r, s, j] = g.reading, t = g.thresholds;
+    $("face").innerHTML =
+      centred("Nod", p, t.nod, 30, "°", true) + centred("Tilt", r, t.tilt, 25, "°", false)
+      + upward(g.select_signal === "brow" ? "Eyebrows" : "Smile", s, t.select, 1, "") + upward("Mouth", j, t.jaw, 1, "")
+      + `<p class="muted">Red lines are the thresholds (top of hub/face.py). A bar turns yellow when it is past one.
+         Nod is the dip below neutral. ${g.fps} frames a second, ${esc(g.rules)} rules.</p>`;
+  }
+
+  const sc = d.sidecar;
+  if (!sc) $("ears").innerHTML = '<p class="muted">Using the pretend Mac (MOCK_SIDECAR=1): no microphone.</p>';
+  else if (sc.error) $("ears").innerHTML = pill("bad", "voice helper is not answering") + `<p class="muted">${esc(sc.error)}</p>`;
+  else {
+    const e = sc.ears || {}, has = typeof e === "object";
+    $("ears").innerHTML = pill(sc.accessibility ? "ok" : "bad", sc.accessibility ? "can read and control apps" : "no Accessibility permission")
+      + pill(sc.silent ? "warn" : "ok", sc.silent ? "voice silenced (test mode)" : "voice on")
+      + pill(sc.overlay ? "ok" : "", sc.overlay ? "overlay showing" : "overlay off")
+      + (has ? pill(e.mic_started ? "ok" : "bad", e.mic_started ? "microphone on" : "microphone not started")
+          + (e.muted ? pill("warn", "muted while speaking") : "") + (e.in_sentence ? pill("ok", "hearing speech") : "")
+          + upward("Level", Math.max(0, e.level_db + 80), Math.max(0, e.speech_needs_db + 80), 80, "")
+              .replace(/<span>[^<]*<\/span><\/div>$/, `<span>${e.level_db.toFixed(0)} dB</span></div>`)
+          + `<p class="muted">Sound now ${e.level_db.toFixed(0)} dB, room ${e.noise_floor_db.toFixed(0)} dB, speech counts above ${e.speech_needs_db.toFixed(0)} dB (red line).
+             ${e.mic_restarts ? "Microphone restarted " + e.mic_restarts + " time(s)." : ""}</p>` : '<p class="muted">Ears are off.</p>');
+  }
+
+  $("calls").innerHTML = d.bonsai_calls.length ? "<table>" + d.bonsai_calls.slice().reverse().slice(0, 12).map(c =>
+      `<tr><td>${ago(d.now, c.at)}</td><td class="kind">${esc(c.kind)}</td><td>${c.s.toFixed(2)} s</td></tr>`).join("") + "</table>"
+    : '<p class="muted">No calls yet.</p>';
+  $("log").innerHTML = d.events.length ? "<table>" + d.events.slice().reverse().map(ev =>
+      `<tr><td>${ago(d.now, ev.at)}</td><td class="kind">${esc(ev.kind)}</td><td>${esc(ev.text)}</td></tr>`).join("") + "</table>"
+    : '<p class="muted">Nothing yet. Nod, speak, or press a key in Blink.</p>';
+}
+tick(); setInterval(tick, 250);
+</script>
+</body>
+</html>

@@ -46,6 +46,7 @@ class GestureLogic:
         self._last_tilt_active = 0.0
         self._last_jaw_active = 0.0
         self._frame_at = None
+        self.last = (0.0, 0.0, 0.0, 0.0)   # latest (pitch, roll, select, jaw) relative to neutral
         self._sel_since = self._jaw_since = None
         self._sel_armed = self._jaw_armed = True
         self._hist = deque()        # (t, pitch, |roll|) for the nod window

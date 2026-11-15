@@ -2,6 +2,7 @@
 import json
 import re
 import time
+from collections import deque
 
 import httpx
 
@@ -136,8 +137,19 @@ SLOTS = {"reply": 0, "task": 1, "actions": 2, "message": 3, "intent": 0, "textre
 TEMPERATURE = {"actions": 0.2, "task": 0.0}
 
 
+CALLS: deque = deque(maxlen=40)     # recent Bonsai calls (kind, seconds), shown on /debug
+
+
 async def _chat(prompt: tuple[str, str] | str, max_tokens: int = 220, schema: dict | None = None,
                 slot: str | None = None, on_text=None) -> str:
+    t0 = time.perf_counter()
+    try:
+        return await _chat_raw(prompt, max_tokens, schema, slot, on_text)
+    finally:
+        CALLS.append({"at": time.time(), "kind": slot or "?", "s": round(time.perf_counter() - t0, 2)})
+
+
+async def _chat_raw(prompt, max_tokens, schema, slot, on_text) -> str:
     """on_text: async callback given the answer so far, each time more of it arrives
     (the tiles fill in as Bonsai writes instead of all at the end)."""
     fixed, changing = prompt if isinstance(prompt, tuple) else ("", prompt)

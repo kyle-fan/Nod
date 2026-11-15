@@ -174,6 +174,8 @@ How a computer step is chosen (`prompts/actions.txt`, `prompts/message.txt`):
 
 Prompt files (`prompts/*.txt`) have two parts split by a line of `=====`. Above it is what never changes between calls (who he is, the rules): it is sent as the system message and llama-server keeps it cached. Below it is what changed (conversation, screen). Keep anything that varies below the line.
 
+`GET /debug` on the hub is a live troubleshooting page (`ui/debug.html`, data from `/debug.json`): gesture readings against thresholds, microphone level, recent Bonsai calls and events.
+
 `GET /demo` and `/demo/game` on the hub are a stand-in sports page and game player (`ui/demo/`), so the Safari chain can be shown with Wi-Fi off.
 
 `GET /settings` and `POST /settings {"express": true, "learn": false}` on the hub switch those two options while it runs (the dev bar has checkboxes for them). `GET /status` reports whether Bonsai, the sidecar and the camera are alive.

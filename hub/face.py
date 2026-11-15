@@ -65,6 +65,8 @@ class GestureDetector:
         self.face_ok = False        # a face is in view right now
         self.calibrating = True     # still learning the neutral pose
         self.error = ""             # set when the camera can't be opened or stops
+        self.reading = None         # latest (pitch, roll, select, jaw) relative to neutral, for /debug
+        self.fps = 0.0
 
     def start(self):
         threading.Thread(target=self.run, daemon=True).start()
@@ -93,6 +95,7 @@ class GestureDetector:
         logic = make_logic(self.tuning())   # NOD_GESTURES=classic switches to the older rules
         was_calibrating = True
         last_face = time.time()
+        last_frame_t = 0.0
         for reading in signals(self.camera_index, self._stop, misses=True):
             if reading is None:                      # a frame with no face in it
                 if time.time() - last_face > 1.0:
@@ -111,6 +114,10 @@ class GestureDetector:
             sel = brow if SELECT_SIGNAL == "brow" else smile
             events = logic.feed(now, pitch, roll, sel, jaw)
             self.calibrating = logic.calibrating
+            if not logic.calibrating:
+                self.reading = logic.last
+            self.fps = 0.9 * self.fps + 0.1 / max(1e-3, now - last_frame_t) if last_frame_t else 0.0
+            last_frame_t = now
             if was_calibrating and not logic.calibrating:
                 print("[face] calibrated. Gestures are live.")
             was_calibrating = logic.calibrating

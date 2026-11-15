@@ -96,6 +96,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 
 - `./doctor.sh`: checks models on disk, permissions, microphone, camera, sound devices and all three services. With Messages open it also says whether the people in the profile (Andrew) have a chat it can see, which is the thing most likely to trip the demo line.
 - `./start.sh` now starts the hub before the sidecar. Last night the hub turning the camera on stopped the microphone that was already running; this order avoids it, and the sidecar restarts the microphone by itself if it ever goes quiet.
+- **http://127.0.0.1:8000/debug**: a live "under the hood" page. It shows what the camera reads for nod, tilt, smile and mouth against each threshold (so you can see how far your nod actually dips), the microphone level against the speech threshold, how long each Bonsai call took, and a log of every gesture, sentence heard and action. Keep it open while tuning.
 - `./test.sh`: about 70 checks in a few seconds, no model or hardware needed.
 - `./rehearse.sh` starts the pretend-Mac rehearsal in one command, and `tools/autoplay.py` plays the whole demo by itself on it. `./test.sh --all` also runs the real sidecar on a recording, silently.
 - `NOD_SILENT=1` or `curl -X POST 'localhost:8790/quiet?on=1'`: rehearse without sound.

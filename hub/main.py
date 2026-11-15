@@ -113,6 +113,12 @@ class State:
 
 
 S = State()
+EVENTS: list[dict] = []     # recent things that happened, newest last, for /debug
+
+
+def note(kind, text):
+    EVENTS.append({"at": time.time(), "kind": kind, "text": str(text)[:120]})
+    del EVENTS[:-60]
 clients: set[WebSocket] = set()
 lock = asyncio.Lock()
 
@@ -552,6 +558,7 @@ async def run_action(action, finish=False):
     """finish=True: this was a confirmed send/post/delete, so the task is over."""
     S.mode, S.status, S.tiles = "thinking", "Doing it...", []
     await broadcast()
+    note("act", describe(action))
     try:
         res = await sidecar.act({k: v for k, v in action.items() if k != "label"})
     except Exception as e:   # sidecar down or crashed: stay usable
@@ -716,10 +723,13 @@ async def on_pick(index):
 
 async def on_gesture(gesture, source="keyboard"):
     if lock.locked():
+        note("gesture", f"{gesture} ({source}) ignored: busy")
         return   # busy (thinking/speaking): drop the gesture instead of queueing it
     if (source == "camera" and gesture == "select" and S.mode in ("choose", "computer")
             and time.time() - S.tiles_at < SELECT_GUARD_S):
+        note("gesture", "select (camera) ignored: tiles just appeared")
         return   # too soon after the tiles appeared to be a real choice
+    note("gesture", f"{gesture} ({source})")
     async with lock:
         try:
             await handle(gesture)
@@ -746,6 +756,7 @@ async def heard(h: Heard):
     if not h.final:
         S.partial = text
     elif text:
+        note("heard", text)
         S.partial = ""
         S.history.append({"who": "friend", "text": text, "at": time.time()})
         S.pregen = None
@@ -872,6 +883,33 @@ async def status():
         except Exception:
             pass
     return out
+
+
+@app.get("/debug.json")
+async def debug_json():
+    """Everything a person tuning or troubleshooting wants on one page (see /debug)."""
+    from . import face
+    det = getattr(app.state, "detector", None)
+    out = {"now": time.time(), "mode": S.mode, "status": S.status, "camera": S.camera,
+           "events": EVENTS[-40:], "bonsai_calls": list(brain.CALLS)[-25:],
+           "settings": settings_view(), "sidecar": None, "gestures": None}
+    if det:
+        out["gestures"] = {
+            "reading": det.reading, "fps": round(det.fps, 1), "select_signal": face.SELECT_SIGNAL,
+            "rules": __import__("os").getenv("NOD_GESTURES", "current"),
+            "thresholds": {"tilt": face.TILT_DEG, "nod": face.NOD_DEG, "select": face.SELECT_T, "jaw": face.JAW_T}}
+    if not config.MOCK_SIDECAR:
+        try:
+            async with httpx.AsyncClient(timeout=1.5) as c:
+                out["sidecar"] = (await c.get(config.SIDECAR_URL + "/status")).json()
+        except Exception as e:
+            out["sidecar"] = {"error": str(e) or type(e).__name__}
+    return out
+
+
+@app.get("/debug")
+async def debug_page():
+    return FileResponse(config.UI_DIR / "debug.html")
 
 
 @app.get("/demo")

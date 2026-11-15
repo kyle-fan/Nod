@@ -72,6 +72,8 @@ Useful switches (all optional, set before `./start.sh`):
 
 First run needs Wi-Fi once to download the speech and face models. After that everything loads from disk.
 
+http://127.0.0.1:8000/debug shows live what the camera and microphone read against their thresholds, Bonsai's timings, and a log of what just happened.
+
 Tune the gestures for whoever is demoing, on the camera they will use: `python -m hub.face --measure` (70 seconds, guided) prints values for the top of `hub/face.py`.
 
 ## Rehearse without a Mac, a camera or a microphone
