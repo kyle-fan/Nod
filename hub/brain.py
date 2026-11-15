@@ -250,6 +250,11 @@ async def suggest_replies(history: list[dict], kind: str | None = None,
         instr.append("The friend asked him to do something he can do from his Mac (text someone, "
                      "put something on). Option 1 just agrees to do it in 2 to 4 casual words, like "
                      '"yeah one sec" or "on it". No reasons, no details about anyone.')
+    if not kind and not path and (not history or history[-1]["who"] != "friend"):
+        # He nodded with nobody waiting on an answer: he wants to start, or to add something.
+        instr.append("Nobody is waiting for an answer right now, so these are 3 things he might say to "
+                     "start talking or keep it going: for example asking what the friend is up to, "
+                     "bringing up something he likes, or asking for something he wants. Not replies.")
     if path:
         detail = f', specifically "{path[-1]}"' if len(path) > 1 else ""
         instr.append(f'He told you what he wants to say: "{path[0]}"{detail}. '
