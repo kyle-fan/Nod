@@ -41,7 +41,7 @@ Settings (environment variables, all optional):
 | `NOD_DEBUG` | `0` | `1` logs transcription timings |
 | `NOD_OVERLAY` | `0` | `1` opens the floating, click-through tile window (loads the hub page with `?overlay=1`) |
 | `NOD_OVERLAY_HEIGHT` | `0.34` | Share of the screen height the overlay covers, from the bottom |
-| `NOD_IGNORE_APPS` | `Terminal,iTerm2,Claude,Xcode` | Apps `/screen` never treats as the app to control |
+| `NOD_IGNORE_APPS` | `Terminal,iTerm2,Claude,Xcode,loginwindow` | Apps `/screen` never treats as the app to control |
 
 Files: `Sidecar.swift` (entry point, server and routes), `Voice.swift` (TTSKit and the mute gate),
 `Ears.swift` (mic, WhisperKit, `/heard`), `Hands.swift` (`/screen`, `/act`), `Overlay.swift` (floating tile window).
@@ -49,6 +49,12 @@ Files: `Sidecar.swift` (entry point, server and routes), `Voice.swift` (TTSKit a
 `/screen` and `/act` target the frontmost app that is not Blink itself (the overlay, the terminal, or a
 browser tab titled "Blink"). `curl "localhost:8790/axdump?app=Messages"` prints an app's raw
 accessibility tree, for working out how a new app exposes its controls.
+
+Messages is read in a purpose-built way (`messagesScreen` in `Hands.swift`): one button per sidebar
+chat labeled with just the name, the message box as `Message <chat name>` with its `value`, and a
+synthetic `Send` that presses Return. Sidebar rows are opened with a real mouse click, because AXPress
+on them multi-selects instead. `POST /restart` (dev only) relaunches a rebuilt binary while keeping
+the terminal's permissions.
 
 ## What it does
 

@@ -133,6 +133,19 @@ func runSidecar() async throws {
         return json(result)
     }
 
+    // Dev only: relaunch the (rebuilt) binary from inside this process, so it keeps the
+    // Microphone / Accessibility permission of the terminal that first started it.
+    await server.appendRoute("POST /restart") { _ in
+        let binary = CommandLine.arguments[0]
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "sleep 1; exec \"$0\"", binary]
+        try? task.run()
+        log("restarting")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) { exit(0) }
+        return json(["ok": true])
+    }
+
     log("listening on http://127.0.0.1:\(port)")
 
     try await server.run()

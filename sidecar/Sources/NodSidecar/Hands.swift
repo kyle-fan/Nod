@@ -9,6 +9,7 @@ final class Hands: @unchecked Sendable {
     private var elements: [Int: AXUIElement] = [:]   // valid until the next /screen
     private var roles: [Int: String] = [:]
     private var sendFieldID: [Int: AXUIElement] = [:]   // synthetic "Send" ids -> the message field
+    private var clickIDs: Set<Int> = []                  // ids that need a real mouse click, not AXPress
     private var lastTarget: NSRunningApplication?        // last real app in front (never Blink itself)
     private let ignoredApps: Set<String>
     private static let browsers: Set<String> = [
@@ -18,7 +19,7 @@ final class Hands: @unchecked Sendable {
 
     init(env: [String: String]) {
         // Apps that are part of running Nod, never the thing the user wants to control.
-        let names = env["NOD_IGNORE_APPS"] ?? "Terminal,iTerm2,Claude,Xcode"
+        let names = env["NOD_IGNORE_APPS"] ?? "Terminal,iTerm2,Claude,Xcode,loginwindow"
         ignoredApps = Set(names.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() })
     }
 
@@ -53,6 +54,16 @@ final class Hands: @unchecked Sendable {
             return front
         }
         if let last = lock.withLock({ lastTarget }), !last.isTerminated { return last }
+        // Nothing remembered yet (we just started): take the topmost window that isn't Blink.
+        let windows = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+            as? [[String: Any]]) ?? []
+        for w in windows where (w[kCGWindowLayer as String] as? Int) == 0 {
+            guard let pid = w[kCGWindowOwnerPID as String] as? pid_t,
+                  let app = NSRunningApplication(processIdentifier: pid),
+                  app.activationPolicy == .regular, !isBlink(app) else { continue }
+            lock.withLock { lastTarget = app }
+            return app
+        }
         return front
     }
 
@@ -114,7 +125,11 @@ final class Hands: @unchecked Sendable {
     private func mapRole(_ el: AXUIElement, axRole: String) -> String? {
         switch axRole {
         case "AXButton", "AXPopUpButton", "AXMenuButton", "AXDisclosureTriangle": return "button"
-        case "AXTextField", "AXTextArea", "AXComboBox", "AXSearchField": return "textfield"
+        case "AXTextField", "AXTextArea", "AXComboBox", "AXSearchField":
+            // Read-only text (chat bubbles, labels) is not something you can type into.
+            var settable: DarwinBoolean = false
+            AXUIElementIsAttributeSettable(el, kAXValueAttribute as CFString, &settable)
+            return settable.boolValue ? "textfield" : nil
         case "AXLink": return "link"
         case "AXMenuItem", "AXMenuBarItem": return "menuitem"
         case "AXCheckBox", "AXSwitch", "AXToggle": return "checkbox"
@@ -166,6 +181,11 @@ final class Hands: @unchecked Sendable {
         // Electron / Chromium apps only build their accessibility tree when asked.
         AXUIElementSetAttributeValue(appEl, "AXManualAccessibility" as CFString, kCFBooleanTrue)
         AXUIElementSetAttributeValue(appEl, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+
+        // Messages gets a purpose-built reading: contact names, the message box and Send.
+        if app.bundleIdentifier == "com.apple.MobileSMS", let result = messagesScreen(app: app, appEl: appEl) {
+            return result
+        }
 
         // Windows only (focused first). The menu bar would flood the list with menu items.
         var roots: [AXUIElement] = []
@@ -236,8 +256,68 @@ final class Hands: @unchecked Sendable {
             sendMap[id] = field
             out.append(["id": id, "role": "button", "label": "Send"])
         }
-        lock.withLock { elements = map; roles = roleMap; sendFieldID = sendMap }
+        lock.withLock { elements = map; roles = roleMap; sendFieldID = sendMap; clickIDs = [] }
         return ["app": app.localizedName ?? "", "elements": out]
+    }
+
+    /// Depth-first search for an element by its AXIdentifier.
+    private func find(identifier: String, in root: AXUIElement, budget: inout Int, depth: Int = 0) -> AXUIElement? {
+        guard budget > 0, depth < 14 else { return nil }
+        budget -= 1
+        if string(root, "AXIdentifier") == identifier { return root }
+        for child in children(root) {
+            if let hit = find(identifier: identifier, in: child, budget: &budget, depth: depth + 1) { return hit }
+        }
+        return nil
+    }
+
+    /// Messages (macOS 26): the sidebar rows are pressable texts described as
+    /// "Name, last message, time", the message box is `messageBodyField`, and there is no
+    /// Send control (Return sends). The hub wants plain labels: "Andrew", "Message Andrew", "Send".
+    private func messagesScreen(app: NSRunningApplication, appEl: AXUIElement) -> [String: Any]? {
+        guard let window = (attr(appEl, kAXFocusedWindowAttribute) ?? attr(appEl, kAXMainWindowAttribute)
+            ?? (attr(appEl, kAXWindowsAttribute) as? [AXUIElement])?.first as AnyObject?) else { return nil }
+        let win = window as! AXUIElement
+        var budget = 800
+        guard let list = find(identifier: "ConversationList", in: win, budget: &budget) else { return nil }
+        var budget2 = 1500
+        let field = find(identifier: "messageBodyField", in: win, budget: &budget2)
+        let chatName = string(win, kAXTitleAttribute)
+
+        var out: [[String: Any]] = []
+        var map: [Int: AXUIElement] = [:]
+        var roleMap: [Int: String] = [:]
+        var sendMap: [Int: AXUIElement] = [:]
+        // AXPress on a sidebar row adds it to a multi-selection ("2 Conversations Selected")
+        // instead of opening it, so rows are opened with a real click.
+        var clicks = Set<Int>()
+        var seen = Set<String>()
+        var id = 0
+        for row in children(list).prefix(60) where out.count < 12 {
+            guard let desc = string(row, kAXDescriptionAttribute) ?? string(row, kAXTitleAttribute) else { continue }
+            // "Andrew, come back, 10:50 PM" / "Andrew, Pinned" -> "Andrew"
+            let name = desc.components(separatedBy: ", ").first?.trimmingCharacters(in: .whitespaces) ?? ""
+            // The chat that is already open is not offered again: the next step there is typing.
+            guard !name.isEmpty, !seen.contains(name), field == nil || name != chatName else { continue }
+            seen.insert(name)
+            id += 1
+            map[id] = row
+            clicks.insert(id)
+            roleMap[id] = "button"
+            out.append(["id": id, "role": "button", "label": name])
+        }
+        if let field {
+            id += 1
+            map[id] = field
+            roleMap[id] = "textfield"
+            out.append(["id": id, "role": "textfield", "label": "Message \(chatName ?? "")".trimmingCharacters(in: .whitespaces),
+                        "value": (attr(field, kAXValueAttribute) as? String) ?? ""])
+            id += 1
+            sendMap[id] = field
+            out.append(["id": id, "role": "button", "label": "Send"])
+        }
+        lock.withLock { elements = map; roles = roleMap; sendFieldID = sendMap; clickIDs = clicks }
+        return ["app": "Messages", "elements": out]
     }
 
     // MARK: /act
@@ -255,6 +335,7 @@ final class Hands: @unchecked Sendable {
         guard let el = lock.withLock({ elements[id] }) else {
             return err("unknown id \(id): call /screen first, ids only last until the next /screen")
         }
+        if type == "press", lock.withLock({ clickIDs.contains(id) }) { return await clickElement(el) }
         if type == "press" { return press(el) }
         guard let text = action["text"] as? String else { return err("missing text") }
         return await typeText(text, into: el)
@@ -301,6 +382,22 @@ final class Hands: @unchecked Sendable {
         }
         selectAll()
         keystrokes(clean)
+        return ["ok": true]
+    }
+
+    /// Bring the element's app forward and click the element's centre.
+    private func clickElement(_ el: AXUIElement) async -> [String: Any] {
+        var pid: pid_t = 0
+        guard AXUIElementGetPid(el, &pid) == .success, let app = NSRunningApplication(processIdentifier: pid) else {
+            return err("element is gone: call /screen again")
+        }
+        if !app.isActive {
+            app.activate()
+            try? await Task.sleep(nanoseconds: 350_000_000)
+        }
+        AXUIElementPerformAction(el, "AXScrollToVisible" as CFString)
+        guard let point = center(of: el) else { return err("element is gone: call /screen again") }
+        click(at: point)
         return ["ok": true]
     }
 
