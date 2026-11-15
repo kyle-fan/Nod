@@ -161,6 +161,7 @@ async def settle(status):
         await broadcast()
 
 
+MAX_TEXT_CHARS = 500     # longest incoming text kept (Bonsai reads it on every answer)
 INCOMING_FRESH_S = 180   # an unanswered text is offered on the next nod for this long
 
 
@@ -811,7 +812,8 @@ async def refresh_replies():
 async def incoming(body: dict):
     """The sidecar saw a new text message arrive. The next nod offers answers to it."""
     who = str(body.get("from") or body.get("sender") or "").strip()
-    text = str(body.get("text") or "").strip()
+    text = str(body.get("text") or "").strip()[:MAX_TEXT_CHARS]   # a pasted essay must not flood the prompt
+    who = who[:60]
     if not who or not text:
         return {"ok": False, "error": "need from and text"}
     last = next((t for t in reversed(S.history) if t["who"] == "text"), None)

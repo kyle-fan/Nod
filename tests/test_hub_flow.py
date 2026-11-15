@@ -229,6 +229,16 @@ async def test_incoming_text_is_answered_in_one_pick():
     assert labels()[-1] == "More..."
 
 
+async def test_a_very_long_or_odd_incoming_text_is_kept_short_and_harmless():
+    await fresh(app="Safari")
+    assert (await main.incoming({"from": "Andrew", "text": "a" * 20000}))["ok"]
+    assert len(S.incoming["text"]) == main.MAX_TEXT_CHARS and len(S.history[-1]["text"]) == main.MAX_TEXT_CHARS
+    assert (await main.incoming({"from": "Andrew"})) == {"ok": False, "error": "need from and text"}
+    assert (await main.incoming({"text": 5}))["ok"] is False
+    await g("nod")
+    assert S.status == "Text Andrew back", S.status
+
+
 async def test_incoming_text_other_answers_and_not_now():
     await fresh()
     await text_arrives()
