@@ -447,6 +447,24 @@ final class Hands: @unchecked Sendable {
             guard let name = action["name"] as? String, !name.isEmpty else { return err("missing name") }
             return await openApp(name)
         }
+        if type == "open_url" {
+            // A web search or page the user chose from a tile: opened in Safari, like a click would.
+            guard let text = action["url"] as? String, let url = URL(string: text),
+                  let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else {
+                return err("open_url needs an http(s) url")
+            }
+            let safari = URL(fileURLWithPath: "/Applications/Safari.app")
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+            do {
+                let app = try await NSWorkspace.shared.open([url], withApplicationAt: safari, configuration: config)
+                lock.withLock { lastTarget = app }
+            } catch {
+                return err("could not open Safari: \(error.localizedDescription)")
+            }
+            try? await Task.sleep(nanoseconds: 2_500_000_000)   // let the page load before it is read
+            return ["ok": true]
+        }
         guard type == "press" || type == "type" else { return err("unknown type '\(type)'") }
         guard Hands.trusted else { return err(Hands.permissionError) }
         let id = (action["id"] as? Int) ?? Int(action["id"] as? String ?? "") ?? -1

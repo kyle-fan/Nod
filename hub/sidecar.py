@@ -36,6 +36,9 @@ class FakeMac:
         elif self.app == "Messages":
             els = [("button", "Andrew"), ("button", "Sam"), ("button", "Mom"),
                    ("textfield", "Search", ""), ("button", "New Message")]
+        elif self.page == "results":
+            els = [("link", "Yankees score today - live updates"), ("link", "MLB scores and standings"),
+                   ("link", "Images"), ("button", "Back")]
         elif self.page == "game":
             els = [("button", "Play"), ("button", "Full Screen"), ("button", "Back")]
         else:
@@ -56,6 +59,12 @@ class FakeMac:
             if action.get("name") not in ("Messages", "Safari"):
                 return {"ok": False, "error": f"no app named {action.get('name')}"}
             self.app, self.chat, self.draft, self.page = action["name"], None, "", "home"
+            return {"ok": True}
+        if t == "open_url":
+            if not str(action.get("url", "")).startswith(("http://", "https://")):
+                return {"ok": False, "error": "open_url needs an http(s) url"}
+            self.app, self.chat, self.draft, self.page = "Safari", None, "", "results"
+            print(f"[fake mac] OPENED {action['url']}")
             return {"ok": True}
         el = next((e for e in self.screen()["elements"] if e["id"] == action.get("id")), None)
         if not el:

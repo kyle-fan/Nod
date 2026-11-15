@@ -1,5 +1,6 @@
 """Bonsai calls: turn context into 3 options. Prompts live in prompts/*.txt."""
 import difflib
+import urllib.parse
 import json
 import re
 import time
@@ -543,6 +544,21 @@ MESSAGING = re.compile(r"\b(text|texts|texting|tell|ask|message|msg|remind|reply
                        r"let\s+\w+(\s+\w+)?\s+know|say\s+(hi|hey|hello|thanks|sorry)|check with|write to|write back)\b", re.I)
 
 
+BROWSERS = ("Safari",)
+SEARCH_URL = "https://www.google.com/search?q="
+LOOKUP = re.compile(r"\b(look\s*up|search|google|find out|find|check|what'?s|what is|who|when|where|how|score|weather|news)\b", re.I)
+
+
+def _search_query(text: str) -> str:
+    """What to type into a web search for this request: "can you look up the Yankees score" ->
+    "Yankees score"."""
+    q = re.sub(r"^(hey,?\s+)?((can|could|would|will) you|please)\s+(please\s+)?", "", text.strip(), flags=re.I)
+    q = re.sub(r"^(look\s*up|search( the web)?( for)?|google|find out|find|check|pull up|put on|put|show me|show|open|play|watch)\s+", "", q, flags=re.I)
+    q = re.sub(r"\s+(on|for me|please|in safari|on safari|online)$", "", q.strip(" ?.!"), flags=re.I)
+    q = re.sub(r"^(the|a|an)\s+", "", q, flags=re.I)
+    return q.strip()[:60]
+
+
 def _this_request(history: list[dict]) -> list[dict]:
     """The turns that say what the task is: the friend's newest request (it may have arrived in
     pieces) and what he answered. Earlier talk and texts are left out, so a task about the game
@@ -722,6 +738,23 @@ async def suggest_actions(history: list[dict], screen: dict, done: list[str] | N
             if key not in seen:
                 seen.add(key)
                 acts.append(a)
+        query = _search_query(info["goal"] or said) if need in BROWSERS and not _goal_person(info["goal"]) else ""
+        if query and not any(d.startswith("Searched the web") for d in done):
+            # Safari with nothing to press is a dead end, so a web search is always on offer:
+            # first when he asked to look something up or nothing on the page matches,
+            # otherwise right after the page's own best step.
+            search = {"type": "open_url", "url": SEARCH_URL + urllib.parse.quote_plus(query),
+                      "query": query, "label": f"Search: {query}"}
+            words = [w for w in _content(query) if len(w) > 3]
+            on_page = app in BROWSERS and any(w in str(e["label"]).lower() for e in elements for w in words
+                                              if e["role"] not in TYPEABLE)
+            under_way = any(d.startswith("Pressed ") for d in done)      # he is already on his way through a page
+            first = not under_way and (bool(LOOKUP.search(said or info["goal"])) or (app in BROWSERS and not on_page))
+            acts = [a for a in acts if not (first and a.get("type") == "open_app" and a.get("name") in BROWSERS)]
+            if first:
+                acts.insert(0, search)
+            elif not under_way or not acts:
+                acts.insert(min(1, len(acts)), search)
         if acts and acts[0].get("draft") and not by_id[acts[0]["id"]].get("value"):
             # An empty box and writing is the next step: show 3 wordings right away.
             acts = await draft_actions(history, screen, acts[0]["id"], info["goal"]) or acts

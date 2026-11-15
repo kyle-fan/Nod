@@ -583,6 +583,8 @@ def describe(action):
     """One line for the "already done" list Bonsai sees on the next step."""
     if action["type"] == "type":
         return f'Typed "{action["text"]}" into "{element(action).get("label", "the text field")}"'
+    if action["type"] == "open_url":
+        return f'Searched the web for "{action.get("query", "")}"'
     if action["type"] == "open_app":
         return f'Opened {action["name"]}'
     return f'Pressed "{action["label"]}"'
