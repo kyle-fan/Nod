@@ -654,6 +654,7 @@ async def pick(tile):
         if tile["value"] and action:
             await run_action(action, finish=True)
         else:
+            S.sending = None
             await show_actions()
     elif k == "done":
         go_listen()
