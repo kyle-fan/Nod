@@ -503,6 +503,13 @@ async def test_passing_something_on_ignores_the_other_persons_last_text():
     assert 'labeled "Message Andrew"' in LAST_MESSAGE_PROMPT[-1]
 
 
+async def test_only_the_named_persons_chat_is_offered():
+    await fresh()
+    await friend("can you tell Andrew to come back")
+    await g("nod", "select")
+    assert "Andrew" in labels() and "Sam" not in labels() and "Mom" not in labels(), labels()
+
+
 async def test_quick_phrases_need_no_model():
     await fresh()
     CALLS.clear()

@@ -529,8 +529,12 @@ async def suggest_actions(history: list[dict], screen: dict, done: list[str] | N
                 rows = [k for k, c in choices.items() if c["type"] == "press"
                         and _same_person(who, by_id[c["id"]]["label"])]
                 if rows:
-                    if f'Pressed "{by_id[choices[rows[0]]["id"]]["label"]}"' not in pressed:
-                        steps = [rows[0]] + [x for x in steps if x != rows[0]]
+                    # Their chat is the way forward, even if it was opened before and the
+                    # list is showing again. Nobody else's chat is offered at all.
+                    pressed.discard(f'Pressed "{by_id[choices[rows[0]]["id"]]["label"]}"')
+                    steps = [rows[0]] + [x for x in steps if x != rows[0]]
+                    blocked |= {k for k, c in choices.items() if c["type"] == "press" and k not in rows
+                                and not any(by_id[c["id"]]["label"].lower().startswith(w) for w in NOT_A_PERSON)}
                 else:
                     # that person's chat isn't on screen: say so rather than open someone else's
                     info["missing"] = who
