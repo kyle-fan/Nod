@@ -74,7 +74,8 @@ async def fake_answer(prompt, schema, slot):
         order += [c for c in lines if c not in order]
         out = {"finished": False, "steps": (order * 3)[:3]}
         if "goal" in schema["properties"]:
-            out = {"goal": "put the yankees game on" if want_safari else "text Andrew: come back",
+            who = "Coach" if "Coach" in user else "Andrew"
+            out = {"goal": "put the yankees game on" if want_safari else f"text {who}: come back",
                    "app": "Safari" if want_safari else "Messages", **out}
         return json.dumps(out)
     raise AssertionError(f"unexpected prompt kind {slot}")
@@ -432,6 +433,28 @@ async def test_use_computer_right_after_a_request_does_that_request():
     await friend("can you tell Andrew to come back")
     await open_use_computer()
     assert S.mode == "computer" and labels()[0] == "Andrew", (S.status, labels())
+
+
+async def test_no_chat_for_that_person_offers_nobody_else():
+    """The friend names someone who has no chat on screen. Bonsai (here, the stand-in) would
+    press Andrew anyway; the guard must not let another person's chat be the next step."""
+    await fresh()
+    await friend("can you tell Coach to come back")
+    await g("nod", "select")
+    assert S.mode == "computer" and labels() == ["Done"], labels()
+    assert S.status == "Can't see a chat with Coach in Messages", S.status
+    assert sidecar.FAKE.sent == [] and sidecar.FAKE.chat is None
+
+
+async def test_another_persons_open_chat_is_never_typed_into():
+    await fresh()
+    sidecar.FAKE.chat = "Sam"                               # Sam's chat happens to be open
+    await friend("can you tell Andrew to come back")
+    await g("nod", "select")
+    assert labels()[0] == "Back to conversations", labels()
+    assert not any(t["kind"] == "redraft" or t["label"] == "Send" for t in S.tiles), labels()
+    await g("select")
+    assert labels()[0] == "Andrew", labels()
 
 
 async def test_quick_phrases_need_no_model():

@@ -39,6 +39,20 @@ def test_goal_is_rewritten_for_the_named_person():
     assert brain._goal_for("say hi", "Sam") == "text Sam: say hi"
 
 
+def test_goal_person():
+    g = brain._goal_person
+    assert g("text Andrew: come back") == "Andrew"
+    assert g("reply to Sammy Tong's text") == "Sammy Tong"
+    assert g("text my mom: running late") == "mom"
+    assert g("text him: come back") == "" and g("put the game on") == "" and g("look up the score") == ""
+
+
+def test_same_person():
+    s = brain._same_person
+    assert s("Andrew", "Andrew") and s("mom", "Mom") and s("Caden", "Caden Ruan") and s("Caden Ruan", "Caden")
+    assert not s("Andrew", "Sam") and not s("", "Sam") and not s("Sam", "Sammy")
+
+
 def test_finished_rules():
     assert brain._looks_finished("put the yankees game on", ['Pressed "Yankees vs Red Sox"', 'Pressed "Play"'])
     assert not brain._looks_finished("put the yankees game on", ['Pressed "Yankees vs Red Sox"'])

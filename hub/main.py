@@ -428,7 +428,10 @@ async def show_actions(note=""):
              for a in acts]
     done = {"label": "Done", "kind": "done"}
     app = S.screen.get("app", "")
-    if info.get("finished") or not tiles:
+    if info.get("missing"):
+        # the person the text is for has no chat on screen: never offer someone else's
+        set_tiles([done], mode="computer", status=note or f'Can\'t see a chat with {info["missing"]} in Messages')
+    elif info.get("finished") or not tiles:
         # Bonsai thinks the task is complete: "Done" comes first, one smile ends it.
         set_tiles([done] + tiles, mode="computer", status=note or "That looks done")
     else:

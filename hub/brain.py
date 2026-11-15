@@ -498,6 +498,33 @@ async def suggest_actions(history: list[dict], screen: dict, done: list[str] | N
             code = f'press {named["id"]}'
             if f'Pressed "{named["label"]}"' not in pressed:
                 steps = [code] + [x for x in steps if x != code]
+        # Recipient guard. Once the goal says who the text is for, nothing may be typed or sent
+        # to anyone else, and nobody else's chat is offered as the way forward.
+        who = _goal_person(info["goal"]) if need == "Messages" and app == "Messages" else ""
+        blocked: set[str] = set()
+        if who:
+            box = next((e for e in elements if e["role"] in TYPEABLE and e["label"].startswith("Message ")), None)
+            if box:                                   # a chat is open
+                if not _same_person(who, box["label"][len("Message "):].split(":")[0]):
+                    # someone else's chat: no typing, no sending, go back to the list first
+                    blocked |= {k for k, c in choices.items()
+                                if c["type"] == "type" or (c["type"] == "press" and any(
+                                    w in by_id[c["id"]]["label"].lower() for w in SEND_WORDS))}
+                    back = next((k for k, c in choices.items() if c["type"] == "press"
+                                 and by_id[c["id"]]["label"].lower().startswith("back")), None)
+                    if back:
+                        steps = [back] + [x for x in steps if x != back]
+            else:                                     # the list of chats
+                rows = [k for k, c in choices.items() if c["type"] == "press"
+                        and _same_person(who, by_id[c["id"]]["label"])]
+                if rows:
+                    if f'Pressed "{by_id[choices[rows[0]]["id"]]["label"]}"' not in pressed:
+                        steps = [rows[0]] + [x for x in steps if x != rows[0]]
+                else:
+                    # that person's chat isn't on screen: say so rather than open someone else's
+                    info["missing"] = who
+                    steps = []
+        steps = [x for x in steps if x not in blocked]
         if _looks_finished(info["goal"], done):
             info["finished"] = True
         for step in steps:
@@ -552,6 +579,25 @@ def _named_on_screen(history: list[dict], elements: list[dict]) -> dict | None:
     exact = [e for e in hits if re.search(rf"\b{re.escape(str(e['label']).lower())}\b", said)]
     hits = exact or hits
     return hits[0] if len(hits) == 1 else None
+
+
+VAGUE = {"him", "her", "them", "someone", "somebody", "everyone", "people", "the group", "a friend", "friend"}
+
+
+def _goal_person(goal: str) -> str:
+    """Who a messaging goal is for: "text Andrew: come back" -> "Andrew". "" if it doesn't say."""
+    m = re.match(r"^(?:text|tell|ask|message|reply to|answer)\s+(.+?)(?:'s text.*)?(?::.*)?$", goal.strip(), flags=re.I)
+    if not m:
+        return ""
+    who = re.sub(r"^(my|his|your)\s+", "", m.group(1).strip(), flags=re.I)
+    return "" if not who or who.lower() in VAGUE or len(who.split()) > 3 else who
+
+
+def _same_person(who: str, label: str) -> bool:
+    a, b = who.lower().strip(), label.lower().strip()
+    if not a or not b:
+        return False
+    return a == b or b.startswith(a + " ") or a.startswith(b + " ") or a.split()[0] == b.split()[0]
 
 
 def _goal_for(goal: str, person: str) -> str:
