@@ -6,6 +6,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 BONSAI_URL = os.getenv("BONSAI_URL", "http://127.0.0.1:8080/v1/chat/completions")
 BONSAI_MODEL = os.getenv("BONSAI_MODEL", "bonsai")
+# How many parallel slots llama-server was started with (-np N). With more than one, each
+# kind of prompt keeps its own slot so its cached prefix survives. start.sh sets this.
+BONSAI_SLOTS = int(os.getenv("BONSAI_SLOTS", "1"))
 
 SIDECAR_URL = os.getenv("SIDECAR_URL", "http://127.0.0.1:8790")
 # 1 = fake the sidecar (print instead of speaking, fake screen). Use this on Windows.

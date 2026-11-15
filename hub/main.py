@@ -58,6 +58,9 @@ class State:
         self.in_computer = False
         self.screen: dict = {}
         self.pending: dict | None = None   # action waiting for confirmation
+        self.goal: dict | None = None      # {"goal", "app"} of the computer task in progress
+        self.drafts_seen: list[str] = []   # message wordings already offered or typed
+        self.prepared: asyncio.Task | None = None   # first computer step, worked out during speech
         self.done: list[str] = []          # computer steps taken this session
         self.pregen: tuple | None = None   # (history_len, replies, offer_computer)
         self.pregen_task: asyncio.Task | None = None
@@ -145,9 +148,13 @@ async def say(text, then=None):
     S.history.append({"who": "me", "text": text})
     S.last_said = text
     await broadcast()
-    await sidecar.speak(text)
     if then == "computer":   # he just agreed to do something on the Mac: start doing it
-        S.done = []
+        start_task()
+        # Read the screen and ask Bonsai for the first step while the reply is being spoken,
+        # so the tiles are ready the moment he stops talking.
+        S.prepared = asyncio.create_task(prepare_actions())
+    await speak(text)
+    if then == "computer":
         await show_actions()
     else:
         go_listen()
@@ -166,16 +173,72 @@ async def pregenerate(n_turns):
 
 # ---------- computer mode ----------
 
+async def speak(text):
+    """Speak through the sidecar. A sidecar that is down or restarting must never leave the
+    hub stuck on "Speaking": report it and carry on."""
+    try:
+        await sidecar.speak(text)
+    except Exception as e:
+        print(f"[speak] failed: {e!r}")
+        S.stats["sidecar_ok"] = False
+    else:
+        S.stats["sidecar_ok"] = True
+
+
+def start_task():
+    S.done, S.goal, S.drafts_seen = [], None, []
+    if S.prepared:
+        S.prepared.cancel()
+    S.prepared = None
+
+
+async def prepare_actions():
+    screen = await sidecar.screen()
+    return screen, await brain.suggest_actions(S.history, screen, S.done, S.goal)
+
+
 async def show_actions(note=""):
     S.in_computer = True
     S.mode, S.status, S.tiles = "thinking", "Reading the screen...", []
     await broadcast()
-    S.screen = await sidecar.screen()
-    acts, ms, ok = await brain.suggest_actions(S.history, S.screen, S.done)
+    prepared, S.prepared = S.prepared, None
+    try:
+        S.screen, (acts, ms, ok, info) = await (prepared or prepare_actions())
+    except Exception as e:   # sidecar down: say so instead of hanging
+        print(f"[screen] failed: {e!r}")
+        go_listen(status="Can't reach the Mac helper")
+        return
     S.stats.update(latency_ms=ms, bonsai_ok=ok)
+    if info.get("goal"):
+        S.goal = {"goal": info["goal"], "app": info["app"]}
+    tiles = [{"label": a["label"], "kind": "redraft" if a.get("draft") else "action", "value": a}
+             for a in acts]
+    done = {"label": "Done", "kind": "done"}
+    app = S.screen.get("app", "")
+    if info.get("finished") or not tiles:
+        # Bonsai thinks the task is complete: "Done" comes first, one smile ends it.
+        set_tiles([done] + tiles, mode="computer", status=note or "That looks done")
+    else:
+        set_tiles(tiles + [done], mode="computer", status=note or f"Computer · {app}")
+
+
+async def show_drafts(action):
+    """3 (more) wordings for a message box."""
+    S.mode, S.status, S.tiles = "thinking", "Writing...", []
+    await broadcast()
+    goal = (S.goal or {}).get("goal", "")
+    try:
+        acts = await brain.draft_actions(S.history, S.screen, action["id"], goal, S.drafts_seen)
+    except Exception as e:
+        print(f"[brain] Bonsai error: {e}")
+        acts = []
+    if not acts:
+        await show_actions(note="Couldn't write that. Try another step?")
+        return
+    S.drafts_seen += [a["text"] for a in acts]
     tiles = [{"label": a["label"], "kind": "action", "value": a} for a in acts]
-    tiles.append({"label": "Done", "kind": "done"})
-    set_tiles(tiles, mode="computer", status=note or f"Computer · {S.screen.get('app', '')}")
+    tiles.append({"label": "More wordings", "kind": "redraft", "value": action})
+    set_tiles(tiles, mode="computer", status="Pick the wording")
 
 
 def element(action):
@@ -218,6 +281,8 @@ async def run_action(action, finish=False):
         await show_actions(note="That didn't work. Try another?")
         return
     S.done.append(describe(action))
+    if action["type"] == "type":
+        S.drafts_seen.append(action["text"])
     if finish:
         go_listen(status="Done")
         return
@@ -271,10 +336,10 @@ async def pick(tile):
         if v == "talk":
             await show_replies()
         elif v == "computer":
-            S.done = []
+            start_task()
             await show_actions()
         elif v == "repeat" and S.last_said:
-            await sidecar.speak(S.last_said)
+            await speak(S.last_said)
             go_listen()
         else:
             go_listen()
@@ -287,9 +352,11 @@ async def pick(tile):
                       mode="computer", status=confirm_question(action))
             S.index = 1   # highlight "No": a stray smile must never send something
             await broadcast()
-            await sidecar.speak(S.status)
+            await speak(S.status)
         else:
             await run_action(action)
+    elif k == "redraft":
+        await show_drafts(tile["value"])
     elif k == "confirm":
         action, S.pending = S.pending, None
         if tile["value"] and action:
@@ -304,7 +371,12 @@ async def on_gesture(gesture):
     if lock.locked():
         return   # busy (thinking/speaking): drop the gesture instead of queueing it
     async with lock:
-        await handle(gesture)
+        try:
+            await handle(gesture)
+        except Exception as e:   # a bug or a dead helper must never freeze the screen
+            import traceback
+            traceback.print_exc()
+            go_listen(status="Something went wrong. Nod to try again")
     await broadcast()
 
 

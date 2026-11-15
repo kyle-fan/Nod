@@ -6,30 +6,24 @@ About {name}:
 How {name} uses his computer:
 {habits}
 
-Recent conversation (this tells you what {name} wants to get done):
+How to work:
+- "goal" is what the friend in the conversation asked {name} to do, in a few words, keeping who and what. Decide it from the conversation only, not from what happens to be on screen. Shapes: "text <person>: <what to pass on>", "reply to <person>'s text", "put <thing> on", "look up <thing>".
+- "app" is the app that goal needs. Telling, texting or replying to someone needs Messages. Putting something on, watching, or looking something up needs Safari.
+- "finished" is true only when the steps already done have completed the goal (the message was sent, the thing is playing, the page is open). Otherwise false.
+- "steps" are the 3 most likely next steps toward the goal, best first, all different. Each one is a code from the list of possible steps, like "press 3" or "type 2" or "open Safari".
+- The first step moves toward the goal, given what's already done. Never repeat a step that's already done.
+- To message someone: press their name, then type into the empty message box, then press Send. If the message box already contains the message, the next step is Send.
+- To put something on: press the link for it, then press Play. After Play there is nothing left to do.
+- Never type a message into a search box.
+=====
+Conversation (this tells you what {name} wants to get done):
 {history}
 
-First decide, from the conversation only and not from what happens to be on screen:
-- "goal": what the friend in this conversation asked {name} to do, in a few words, keeping who and what. Shapes: "text <person>: <what to pass on>", "put <thing> on", "look up <thing>".
-- "app": the app that goal needs. Telling or texting someone needs Messages. Putting something on, watching, or looking something up needs Safari.
-
-Steps already done just now:
+{goal_line}Steps already done just now:
 {done}
 
 App in front: {app}
-Other apps he can open: {apps}
-On screen right now (id: kind "label"):
+Possible steps right now (code = what it does):
 {elements}
 
-Then suggest 3 different next steps toward the goal, most likely first. Each is one of:
-{{"type": "press", "id": <id of a button or link>}}
-{{"type": "type", "id": <id of a text field>, "text": "<what to type>"}}
-{{"type": "open_app", "name": "<app>"}}
-Rules:
-- The first step moves toward the goal, given what's already done. Never repeat a step that's already done.
-- To message someone: press their name, then type the message into the empty message field, then press Send. If the message field already contains the message, the next step is Send.
-- A message passes on what the friend asked {name} to tell that person, in {name}'s words. It is never {name}'s reply to the friend, and never an answer on the other person's behalf.
-- Messages are under 12 words, plain and low-key, no exclamation marks, no emojis:
-{style}
-- The other 2 steps are sensible alternatives (for a type step, the same message worded differently).
-Return JSON: {{"goal": "...", "app": "...", "actions": [ ... ]}}
+Return JSON: {json_shape}

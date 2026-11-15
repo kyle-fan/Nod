@@ -48,8 +48,16 @@ def _history_text(history: list[dict], name: str) -> str:
     )
 
 
-def _prompt(file: str, **kw) -> str:
-    return (config.PROMPTS_DIR / file).read_text(encoding="utf-8").format(**kw)
+SPLIT = "\n=====\n"
+
+
+def _prompt(file: str, **kw) -> tuple[str, str]:
+    """A prompt file is two parts split by a line of =====. The part above is the same on
+    every call (who he is, the rules) and goes in the system message, where llama-server
+    keeps it cached. The part below is what changed (the conversation, the screen)."""
+    text = (config.PROMPTS_DIR / file).read_text(encoding="utf-8").format(**kw)
+    fixed, _, changing = text.partition(SPLIT)
+    return (fixed.strip(), changing.strip()) if changing else ("", fixed.strip())
 
 
 # llama-server grammar-constrains output to this, so Bonsai can't emit broken JSON.
@@ -85,15 +93,26 @@ INTENT_SCHEMA = {
 }
 
 
-async def _chat(prompt: str, max_tokens: int = 220, schema: dict | None = None) -> str:
+# Each kind of prompt keeps its own llama-server slot when the server has several (-np 4),
+# so the long fixed part of that prompt stays cached between calls. With one slot it still works.
+SLOTS = {"reply": 0, "task": 1, "actions": 2, "message": 3, "intent": 0}
+
+
+async def _chat(prompt: tuple[str, str] | str, max_tokens: int = 220, schema: dict | None = None,
+                slot: str | None = None) -> str:
+    fixed, changing = prompt if isinstance(prompt, tuple) else ("", prompt)
+    messages = ([{"role": "system", "content": fixed}] if fixed else []) + [{"role": "user", "content": changing}]
     payload = {
         "model": config.BONSAI_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": messages,
         "temperature": 0.7,
         "max_tokens": max_tokens,
         # Bonsai 2 reasons by default; turn it off for fast replies.
         "chat_template_kwargs": {"enable_thinking": False},
     }
+    payload["cache_prompt"] = True
+    if slot and config.BONSAI_SLOTS > 1:
+        payload["id_slot"] = SLOTS.get(slot, 0) % config.BONSAI_SLOTS
     if schema:
         payload["response_format"] = {"type": "json_schema",
                                       "json_schema": {"name": "out", "schema": schema}}
@@ -128,7 +147,7 @@ async def computer_task(history: list[dict]) -> bool:
     p = load_profile()
     try:
         out = await _chat(_prompt("task.txt", name=p["name"], history=_history_text(history[-4:], p["name"])),
-                          max_tokens=20, schema=TASK_SCHEMA)
+                          max_tokens=20, schema=TASK_SCHEMA, slot="task")
         return json.loads(out).get("task") in ("message", "computer")
     except Exception as e:
         print(f"[brain] Bonsai error: {e}")
@@ -163,7 +182,7 @@ async def suggest_replies(history: list[dict], kind: str | None = None,
                      history=_history_text(history, p["name"]), kind_instruction=instr)
     t0 = time.perf_counter()
     try:
-        out = await _chat(prompt, schema=QUESTION_SCHEMA if wants_question else REPLY_SCHEMA)
+        out = await _chat(prompt, schema=QUESTION_SCHEMA if wants_question else REPLY_SCHEMA, slot="reply")
         replies = [str(r).strip() for r in _parse_json(out, "replies") if str(r).strip()]
         if not replies:  # malformed JSON: salvage the quoted strings, never raw lines
             quoted = re.findall(r'"((?:[^"\\]|\\.)+)"', out)
@@ -192,7 +211,7 @@ async def suggest_intents(history: list[dict], path: list[str], rejected: list[s
                      seen="; ".join(seen) or "(none)")
     t0 = time.perf_counter()
     try:
-        data = json.loads(await _chat(prompt, max_tokens=120, schema=INTENT_SCHEMA))
+        data = json.loads(await _chat(prompt, max_tokens=120, schema=INTENT_SCHEMA, slot="intent"))
         question = str(data.get("question", "")).strip()
         seen_l = {s.lower() for s in seen}
         options = [o.strip() for o in map(str, data.get("options", []))
@@ -211,109 +230,171 @@ TYPEABLE = ("textfield", "textarea", "searchfield", "combobox")
 SEND_WORDS = ("send", "post", "submit")
 
 
-def _action_schema(elements: list[dict], apps: list[str], all_apps: list[str]) -> dict:
-    """Only steps that are possible right now: press a real pressable id, type into a
-    real text field id, or open one of the user's apps."""
-    press = [e["id"] for e in elements if e["role"] not in TYPEABLE]
-    fields = [e["id"] for e in elements if e["role"] in TYPEABLE]
-    kinds = []
-    if press:
-        kinds.append({"type": "object", "required": ["type", "id"],
-                      "properties": {"type": {"const": "press"}, "id": {"enum": press}}})
-    if fields:
-        kinds.append({"type": "object", "required": ["type", "id", "text"],
-                      "properties": {"type": {"const": "type"}, "id": {"enum": fields},
-                                     "text": {"type": "string", "pattern": r"^[^\"\\]{1,90}$"}}})
-    if apps:
-        kinds.append({"type": "object", "required": ["type", "name"],
-                      "properties": {"type": {"const": "open_app"}, "name": {"enum": apps}}})
-    # goal and app come first so the model commits to them before choosing steps
-    return {"type": "object", "required": ["goal", "app", "actions"], "properties": {
-        "goal": {"type": "string", "pattern": r"^[^\"\\]{3,70}$"},
-        "app": {"enum": all_apps},
-        "actions": {"type": "array", "items": {"anyOf": kinds}, "minItems": 3, "maxItems": 3}}}
+def _step_choices(elements: list[dict], apps: list[str]) -> dict[str, dict]:
+    """Every step that is possible right now, keyed by the short line Bonsai copies.
+    Short lines keep the answer small: Bonsai writes about 30 tokens instead of 100,
+    which is most of the wait on a computer step."""
+    choices: dict[str, dict] = {}
+    for e in elements:
+        if e["role"] in TYPEABLE:
+            choices[f'type {e["id"]}'] = {"type": "type", "id": e["id"]}
+        else:
+            choices[f'press {e["id"]}'] = {"type": "press", "id": e["id"]}
+    for a in apps:
+        choices[f"open {a}"] = {"type": "open_app", "name": a}
+    return choices
 
 
-async def suggest_actions(history: list[dict], screen: dict,
-                          done: list[str] | None = None) -> tuple[list[dict], int, bool]:
+def _action_schema(choices: list[str], all_apps: list[str], with_goal: bool) -> dict:
+    props = {"finished": {"type": "boolean"},
+             "steps": {"type": "array", "items": {"enum": choices}, "minItems": 3, "maxItems": 3}}
+    required = ["finished", "steps"]
+    if with_goal:   # first step of a task: commit to the goal and app before choosing steps
+        props = {"goal": {"type": "string", "pattern": r"^[^\"\\]{3,70}$"},
+                 "app": {"enum": all_apps}, **props}
+        required = ["goal", "app"] + required
+    return {"type": "object", "required": required, "properties": props}
+
+
+async def suggest_actions(history: list[dict], screen: dict, done: list[str] | None = None,
+                          goal: dict | None = None) -> tuple[list[dict], int, bool, dict]:
     """3 likely next steps on the computer. done = steps already taken this session.
+    goal = {"goal", "app"} from an earlier step of the same task (saves deciding it again).
+    Returns (actions, ms, ok, info) where info = {"goal", "app", "finished"}.
     Each action gets a "label" built from the real element, so a tile says what will happen."""
     p = load_profile()
     elements = screen.get("elements", [])
     by_id = {e["id"]: e for e in elements}
     app = screen.get("app", "unknown")
     apps = [a for a in p.get("apps", []) if a != app]
+    done = done or []
+    info = {"goal": (goal or {}).get("goal", ""), "app": (goal or {}).get("app", ""), "finished": False}
 
     def line(e):
-        extra = ""
         if e["role"] in TYPEABLE:
-            extra = f'  (already contains: "{e["value"]}")' if e.get("value") else "  (empty)"
-        return f'{e["id"]}: {e["role"]} "{e["label"]}"{extra}'
+            extra = f' (already contains: "{e["value"]}")' if e.get("value") else " (empty)"
+            return f'type {e["id"]} = write in the text box "{e["label"]}"{extra}'
+        return f'press {e["id"]} = press the {e["role"]} "{e["label"]}"'
 
+    choices = _step_choices(elements, apps)
+    with_goal = not info["goal"]
+    shape = ('{"goal": "...", "app": "...", "finished": false, "steps": ["...", "...", "..."]}' if with_goal
+             else '{"finished": false, "steps": ["...", "...", "..."]}')
     prompt = _prompt("actions.txt", name=p["name"], profile=_profile_text(p),
                      habits="\n".join(f"- {x}" for x in p.get("computer", [])) or "(none)",
-                     style=_style_text(p), history=_history_text(history, p["name"]),
-                     app=app, apps=", ".join(apps) or "(none)",
-                     elements="\n".join(line(e) for e in elements) or "(nothing)",
-                     done="\n".join(f"- {d}" for d in done or []) or "(nothing yet)")
+                     history=_history_text(history, p["name"]),
+                     goal_line="" if with_goal else f'Goal: {info["goal"]} (needs {info["app"]})\n\n',
+                     app=app,
+                     elements="\n".join([line(e) for e in elements]
+                                        + [f"open {a} = switch to the {a} app" for a in apps]) or "(nothing)",
+                     done="\n".join(f"- {d}" for d in done) or "(nothing yet)",
+                     json_shape=shape)
     t0 = time.perf_counter()
     acts, seen, ok = [], set(), True
     try:
+        if not choices:
+            raise ValueError("nothing on screen to act on")
         all_apps = list(dict.fromkeys([app] + apps))
-        out = await _chat(prompt, max_tokens=240, schema=_action_schema(elements, apps, all_apps))
+        out = await _chat(prompt, max_tokens=140, slot="actions",
+                          schema=_action_schema(list(choices), all_apps, with_goal))
         m = re.search(r"\{.*\}", out, flags=re.S)
         data = json.loads(m.group(0)) if m else {}
-        need = data.get("app")
-        print(f'[brain] goal: {data.get("goal")}  app: {need}')
+        if with_goal:
+            info["goal"], info["app"] = str(data.get("goal", "")).strip(), data.get("app") or app
+        info["finished"] = bool(data.get("finished")) and bool(done)
+        need = info["app"]
+        print(f'[brain] goal: {info["goal"]}  app: {need}  finished: {info["finished"]}')
         if need in apps:   # the task lives in another app: opening it is the first step
             seen.add(("open_app", None, need))
             acts.append({"type": "open_app", "name": need, "label": f"Open {need}"})
         nothing_typed = not any(e.get("value") for e in elements if e["role"] in TYPEABLE)
         has_field = any(e["role"] in TYPEABLE for e in elements)
-        for a in data.get("actions", []):
-            if not isinstance(a, dict):
-                continue
+        pressed = {d for d in done if d.startswith("Pressed ")}
+        steps = list(data.get("steps", []))
+        send = next((k for k, c in choices.items() if c["type"] == "press"
+                     and any(w in by_id[c["id"]]["label"].lower() for w in SEND_WORDS)), None)
+        if send and has_field and not nothing_typed:
+            # The message is written and there is a Send control: sending is always the
+            # first tile, whatever order Bonsai put things in.
+            steps = [send] + [x for x in steps if x != send]
+        if _looks_finished(info["goal"], done):
+            info["finished"] = True
+        for step in steps:
+            a = dict(choices.get(step) or {})
             t, el = a.get("type"), by_id.get(a.get("id"))
-            if t == "press" and el and el["role"] not in TYPEABLE:
+            if t == "press" and el:
                 if has_field and nothing_typed and any(w in el["label"].lower() for w in SEND_WORDS):
                     continue   # nothing to send yet
-                a = {"type": "press", "id": el["id"], "label": el["label"]}
-            elif t == "type" and el and el["role"] in TYPEABLE and str(a.get("text", "")).strip():
-                if "search" in el["label"].lower() and need == "Messages":
-                    continue   # a message doesn't go in the search box
-                text = str(a["text"]).strip()
-                if text == el.get("value"):
-                    continue   # already typed
-                a = {"type": "type", "id": el["id"], "text": text, "label": text}
+                if f'Pressed "{el["label"]}"' in pressed:
+                    continue   # already done in this task: offering it again only costs a gesture
+                a["label"] = el["label"]
+            elif t == "type" and el:
+                if need != "Messages" or "search" in el["label"].lower():
+                    continue   # only messages get written: a search box can't be submitted by gesture yet
+                a["label"] = "Write a different message" if el.get("value") else "Write a message"
+                a["draft"] = True   # the words come from the message prompt, not from this call
             elif t == "open_app" and a.get("name") in apps:
-                a = {"type": "open_app", "name": a["name"], "label": f'Open {a["name"]}'}
+                a["label"] = f'Open {a["name"]}'
             else:
                 continue
             key = (a["type"], a.get("id"), a.get("name"))   # one tile per element
             if key not in seen:
                 seen.add(key)
                 acts.append(a)
-        if acts and acts[0]["type"] == "type":
-            # Writing the message is the hard part, so it gets its own focused prompt.
-            # The 3 tiles become 3 wordings for the same field.
-            field = by_id[acts[0]["id"]]
-            drafts = await _draft_messages(p, history, app, field["label"], str(data.get("goal", "")))
-            if drafts:
-                acts = [{"type": "type", "id": field["id"], "text": d, "label": d} for d in drafts]
+        if acts and acts[0].get("draft") and not by_id[acts[0]["id"]].get("value"):
+            # An empty box and writing is the next step: show 3 wordings right away.
+            acts = await draft_actions(history, screen, acts[0]["id"], info["goal"]) or acts
     except Exception as e:
         print(f"[brain] Bonsai error: {e}")
         ok = False
     ms = int((time.perf_counter() - t0) * 1000)
-    return acts[:3], ms, ok
+    return acts[:3], ms, ok, info
 
 
-async def _draft_messages(p: dict, history: list[dict], app: str, field: str, goal: str) -> list[str]:
+def _looks_finished(goal: str, done: list[str]) -> bool:
+    """Obvious endings Bonsai sometimes misses: the thing he asked to put on is playing,
+    or the page he asked for was opened."""
+    g = goal.lower()
+    last = done[-1].lower() if done else ""
+    if not last.startswith("pressed "):
+        return False
+    if g.startswith(("put", "play", "watch")) and any(w in last for w in ('"play', "watch now", "resume")):
+        return True
+    if g.startswith(("look up", "open", "show", "find", "check")):
+        words = [w for w in re.findall(r"[a-z0-9]+", g) if len(w) > 3 and w not in ("look", "open", "show", "find", "check")]
+        return bool(words) and any(w in last for w in words)
+    return False
+
+
+async def draft_actions(history: list[dict], screen: dict, field_id, goal: str,
+                        avoid: list[str] | None = None) -> list[dict]:
+    """3 wordings of the message for one text box, as ready-to-run type actions.
+    Writing the message is the hard part, so it gets its own focused prompt."""
+    p = load_profile()
+    field = next((e for e in screen.get("elements", []) if e["id"] == field_id), None)
+    if not field:
+        return []
+    avoid = [x for x in (avoid or []) + [field.get("value", "")] if x]
+    # His own "yeah one sec" to the friend is not part of the message: leave it out,
+    # or Bonsai offers it as a wording.
+    spoken = list(history)
+    while spoken and spoken[-1]["who"] == "me":
+        spoken.pop()
+    drafts = await _draft_messages(p, spoken or history, screen.get("app", ""), field["label"], goal, avoid)
+    return [{"type": "type", "id": field["id"], "text": d, "label": d} for d in drafts]
+
+
+async def _draft_messages(p: dict, history: list[dict], app: str, field: str, goal: str,
+                          avoid: list[str] | None = None) -> list[str]:
     prompt = _prompt("message.txt", name=p["name"], profile=_profile_text(p), style=_style_text(p),
                      examples="\n".join(
                          f'Friend said: "{t["friend"]}"\nYou texted {t["to"]}: ' + " / ".join(t["texts"])
                          for t in p.get("texts", [])) or "(none yet)",
                      history=_history_text(history, p["name"]), app=app, field=field,
-                     goal=goal or "(see the conversation)")
-    out = await _chat(prompt, max_tokens=120, schema=REPLY_SCHEMA)
+                     goal=goal or "(see the conversation)",
+                     avoid=("He already passed on these wordings, so write different ones: "
+                            + "; ".join(avoid) + "\n") if avoid else "")
+    out = await _chat(prompt, max_tokens=120, schema=REPLY_SCHEMA, slot="message")
     drafts = [str(r).strip() for r in _parse_json(out, "replies") if str(r).strip()]
-    return list(dict.fromkeys(drafts))[:3]
+    low = {a.lower() for a in avoid or []}
+    return [d for d in dict.fromkeys(drafts) if d.lower() not in low][:3]

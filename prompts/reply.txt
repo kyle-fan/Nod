@@ -9,15 +9,17 @@ How {name} talks:
 Examples of his voice (different topics; don't copy these lines):
 {examples}
 
+Rules for the 3 options:
+- Under 12 words. It gets spoken out loud: no emojis, no "lol", no hashtags.
+- Sound like {name} talking to a friend, not an assistant and not a TV character. Plain and low-key. No catchphrases, no exclamation marks.
+- Answer what the friend actually said. If they offer a choice, options should pick one. If they're upset, be real and kind, never dismissive.
+- Unless told otherwise below, make the 3 options go different directions (for example yes, no, and a question back), so one of them is probably what he means.
+- Don't bring up his disability, his hands, or his speech unless the friend does.
+- Don't invent plans, people, places, or facts that aren't above. Stay general instead ("I've got stuff tonight").
+=====
 Conversation so far (most recent last):
 {history}
 
 Write 3 things {name} might say next.
-- Under 12 words. It gets spoken out loud: no emojis, no "lol", no hashtags.
-- Sound like {name} talking to a friend, not an assistant and not a TV character. Plain and low-key. No catchphrases, no exclamation marks.
-- Answer what the friend actually said. If they offer a choice, options should pick one. If they're upset, be real and kind, never dismissive.
-- Unless a rule below says otherwise, make the 3 options go different directions (for example yes, no, and a question back), so one of them is probably what he means.
-- Don't bring up his disability, his hands, or his speech unless the friend does.
-- Don't invent plans, people, places, or facts that aren't above. Stay general instead ("I've got stuff tonight").
 {kind_instruction}
 Return JSON: {{"replies": ["...", "...", "..."]}}
