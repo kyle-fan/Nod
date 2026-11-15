@@ -20,6 +20,7 @@ final class Ears: @unchecked Sendable {
 
     // Tunables (seconds / dB). Override with env for noisy rooms.
     private let endSilence: Double        // pause that ends an utterance
+    private let midSentenceExtra: Double  // extra wait when the words so far don't end a sentence
     private let minSpeech = 0.25          // shorter bursts are clicks, not speech
     private let maxUtterance = 20.0
     private let preRoll = 0.4
@@ -46,6 +47,8 @@ final class Ears: @unchecked Sendable {
     private var lastDB: Float = -100
     private var peakDB: Float = -100
     private var micStarted = false
+    private var vocabulary = ""
+    private var hintTokens: [ObjectIdentifier: [Int]] = [:]
     private var lastBufferAt = Date()
     private var micRestarts = 0
 
@@ -81,6 +84,7 @@ final class Ears: @unchecked Sendable {
         self.fast = fast ?? whisper
         self.hubURL = hubURL
         self.endSilence = Double(env["NOD_END_SILENCE"] ?? "") ?? 0.7
+        self.midSentenceExtra = Double(env["NOD_MID_SENTENCE_EXTRA"] ?? "") ?? 0.6
         self.gateDB = Float(env["NOD_VAD_DB"] ?? "") ?? 9
         self.debug = env["NOD_DEBUG"] == "1"
         let cfg = URLSessionConfiguration.ephemeral
@@ -286,7 +290,15 @@ final class Ears: @unchecked Sendable {
             return
         }
 
-        if silenceSeconds >= endSilence || length >= maxUtterance || captionStable {
+        // A pause after a finished sentence ends it quickly. A pause in the middle of one
+        // ("we could order thai, or ... ") gets a little longer, so people who stop to think
+        // are not cut in half. Whisper's punctuation tells the two apart.
+        let finished = candidateText.map { text in
+            guard let last = text.trimmingCharacters(in: .whitespaces).last else { return true }
+            return ".?!".contains(last)
+        } ?? false
+        let pauseNeeded = finished ? endSilence : endSilence + midSentenceExtra
+        if silenceSeconds >= pauseNeeded || length >= maxUtterance || captionStable {
             let audio = utterance
             let hadSpeech = speechSeconds >= minSpeech
             let hadPartial = !lastPartialText.isEmpty
@@ -327,8 +339,26 @@ final class Ears: @unchecked Sendable {
 
     // MARK: Whisper
 
+    /// Words Whisper should expect (names, teams): given to the decoder as a short hint, so
+    /// "Yankees" is not heard as "youngies" in a noisy room. Empty = no hint.
+    func setVocabulary(_ words: [String]) {
+        let hint = words.isEmpty ? "" : " " + words.joined(separator: ", ") + "."
+        lock.withLock { vocabulary = hint; hintTokens = [:] }
+    }
+
+    private func hint(for model: WhisperKit) -> [Int]? {
+        let key = ObjectIdentifier(model)
+        if let cached = lock.withLock({ hintTokens[key] }) { return cached.isEmpty ? nil : cached }
+        let text = lock.withLock { vocabulary }
+        guard !text.isEmpty, let tokenizer = model.tokenizer else { return nil }
+        let tokens = Array(tokenizer.encode(text: text).filter { $0 < tokenizer.specialTokens.specialTokenBegin }.suffix(60))
+        lock.withLock { hintTokens[key] = tokens }
+        return tokens.isEmpty ? nil : tokens
+    }
+
     private func transcribe(_ audio: [Float], using model: WhisperKit) async -> String {
         var options = DecodingOptions()
+        options.promptTokens = hint(for: model)
         options.language = "en"
         options.temperature = 0
         options.temperatureFallbackCount = 0

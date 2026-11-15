@@ -44,6 +44,40 @@ func profileVoice() -> String? {
     return nil
 }
 
+/// Names and proper nouns from hub/profile.json (people, apps, capitalised words in "about",
+/// plus an optional "vocabulary" list): words the speech recogniser should expect.
+func profileVocabulary() -> [String] {
+    let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let candidates = [env["NOD_PROFILE"].map { URL(fileURLWithPath: $0) },
+                      cwd.appending(path: "../hub/profile.json"),
+                      cwd.appending(path: "hub/profile.json")].compactMap { $0 }
+    for url in candidates {
+        guard let data = try? Data(contentsOf: url),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+        var words: [String] = (obj["vocabulary"] as? [String]) ?? []
+        if let name = obj["name"] as? String { words.append(name) }
+        words += Array(((obj["people"] as? [String: Any]) ?? [:]).keys)
+        for line in (obj["about"] as? [String]) ?? [] {
+            // capitalised words that are not the first word of the line: names, teams, games
+            let parts = line.split(separator: " ").map(String.init)
+            var run: [String] = []
+            for (i, raw) in parts.enumerated() {
+                let w = raw.trimmingCharacters(in: .punctuationCharacters)
+                // a line's first word is capitalised anyway; count it only if it isn't an ordinary opener
+                let opener = i == 0 && ["has", "have", "shares", "share", "does", "doesn't", "loves", "likes",
+                                        "plays", "talks", "is", "was", "can", "can't", "the", "his", "her", "a", "an",
+                                        "lives", "works", "studies", "always", "never", "most"].contains(w.lowercased())
+                if !opener, let f = w.first, f.isUppercase, w.count > 2 { run.append(w) }
+                else { if !run.isEmpty { words.append(run.joined(separator: " ")) }; run = [] }
+            }
+            if !run.isEmpty { words.append(run.joined(separator: " ")) }
+        }
+        var seen = Set<String>()
+        return words.filter { seen.insert($0.lowercased()).inserted }
+    }
+    return []
+}
+
 /// People the character knows (hub/profile.json "people"). Read-only.
 func profilePeople() -> [String] {
     let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -87,6 +121,11 @@ func runSidecar() async throws {
         let fast = fastModel.isEmpty || fastModel == whisperModel ? nil : try await Ears.loadWhisper(model: fastModel)
         let e = Ears(whisper: whisper, fast: fast, hubURL: hubURL, env: env)
         earsRef = e
+        if env["NOD_VOCAB"] != "0" {
+            let vocab = profileVocabulary()
+            e.setVocabulary(vocab)
+            log("speech hints: \(vocab.joined(separator: ", "))")
+        }
         await e.warmUp()
         if let file = env["NOD_AUDIO_FILE"] {
             log("TEST MODE: feeding \(file) instead of the microphone")
