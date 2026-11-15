@@ -102,17 +102,14 @@ REPLY_SCHEMA = {
         "replies": {
             "type": "array",
             # One reply per string: no "/" (the model likes to cram options together).
-            "items": {"type": "string", "pattern": r"^[^\"\\/]{1,90}$"},
+            # 70 characters is about 12 words: longer than that doesn't fit a tile or a breath.
+            "items": {"type": "string", "pattern": r"^[^\"\\/]{1,70}$"},
             "minItems": 3,
             "maxItems": 3,
         }
     },
     "required": ["replies"],
 }
-# Same, but every reply must end in "?" (for "ask a question" picks).
-QUESTION_SCHEMA = json.loads(json.dumps(REPLY_SCHEMA))
-QUESTION_SCHEMA["properties"]["replies"]["items"]["pattern"] = r"^[^\"\\/]{1,88}\?$"
-
 INTENT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -274,17 +271,24 @@ async def suggest_replies(history: list[dict], kind: str | None = None,
                      "None of them may change his answer or say the opposite.")
     if avoid:
         instr.append("He already passed on these, so don't repeat them: " + "; ".join(avoid))
+    # "Ask who's going" means the reply is a question put to the friend ("Ask Andrew to study"
+    # does not: that is a suggestion).
+    asking = bool(path and re.match(r"^ask (who|what|when|where|why|how|if|whether|which|about)\b", path[-1].lower()))
+    if asking:
+        instr.append(f'"{path[-1]}" means he wants to put that question to the friend. Each option is the '
+                     'short question itself, said to the friend, like "when do you need it?" or "who else is '
+                     'going?". Never start with the word "ask", and never answer the question yourself.')
     instr = "\n".join(f"- {x}" for x in instr if x)
-    wants_question = kind == "question" or (path and path[-1].lower().startswith("ask"))
     prompt = _prompt("reply.txt", name=p["name"], profile=_profile_text(p),
                      style=_style_text(p), examples=_examples_text(p),
                      history=_history_text(history, p["name"]), kind_instruction=instr,
                      learned=_learned_text())
     t0 = time.perf_counter()
     try:
-        out = await _chat(prompt, schema=QUESTION_SCHEMA if wants_question else REPLY_SCHEMA, slot="reply",
-                          on_text=_stream_to(on_partial))
+        out = await _chat(prompt, schema=REPLY_SCHEMA, slot="reply", on_text=_stream_to(on_partial))
         replies = [str(r).strip() for r in _parse_json(out, "replies") if str(r).strip()]
+        if asking:       # an instruction read back ("ask who's going") is not a question to the friend
+            replies = [r for r in replies if not r.lower().startswith("ask ")] or replies
         if not replies:  # malformed JSON: salvage the quoted strings, never raw lines
             quoted = re.findall(r'"((?:[^"\\]|\\.)+)"', out)
             replies = [q.strip() for q in quoted if q.strip() and q != "replies"]
