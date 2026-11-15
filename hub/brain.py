@@ -712,7 +712,18 @@ async def _draft_messages(p: dict, history: list[dict], app: str, field: str, go
     out = await _chat(prompt, max_tokens=120, schema=REPLY_SCHEMA, slot="message")
     drafts = [str(r).strip() for r in _parse_json(out, "replies") if str(r).strip()]
     if "your answer to" not in field:     # passing something on: it is said to them, not about them
-        drafts = [_second_person(d) for d in drafts
-                  if not re.match(r"^(ask|tell|text|remind|let)\b", d.strip(), flags=re.I)] or drafts
+        who = field[len("Message "):].strip().lower() if field.startswith("Message ") else ""
+        names = [w for w in {who, who.split()[0] if who else ""} if len(w) > 2]
+
+        def fits(d: str) -> bool:
+            low = d.lower()
+            if re.match(r"^(ask|tell|text|remind|let)\b", low):
+                return False                      # an instruction about them, not a message to them
+            if any(re.search(rf"\b{re.escape(n)}\b", low) for n in names):
+                return False                      # talks about them by name
+            # he is the one staying put: he never announces that he is on his way
+            return not re.search(r"\b(on my way|omw|i'?ll be there|be there soon|i'?m coming|"
+                                 r"coming (soon|over|now)|^coming back)\b", low)
+        drafts = [_second_person(d) for d in drafts if fits(d)] or [_second_person(d) for d in drafts]
     low = {a.lower() for a in avoid or []}
     return [d for d in dict.fromkeys(drafts) if d.lower() not in low][:3]

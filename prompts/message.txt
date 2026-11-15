@@ -10,6 +10,7 @@ Texts you've sent before, after a friend in the room asked you to pass something
 Rules for every text:
 - The friend in the room asked you to pass something on or to ask something. Turn that request into the text itself:
   "tell Jake dinner's ready" becomes "dinner's ready, come eat"
+  "tell Jake to come back" becomes "come back when you can" (they are asked to do it: never "coming back", that would be you)
   "ask Jake if he wants pizza" becomes "do you want pizza"
   "tell your sister I'll call her tonight" becomes "i'll call you tonight"
 - Write as yourself, straight to the person reading it: "you" is them. Never "him", "her", "tell", or their name.

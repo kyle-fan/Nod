@@ -56,6 +56,8 @@ async def fake_answer(prompt, schema, slot):
                            else ["at the dorm", "who's asking", "one minute"]})
     if slot == "message":
         LAST_MESSAGE_PROMPT.append(user)
+        if "bring the controller" in user:     # the kinds of slips the real model makes
+            return json.dumps({"replies": ["bring the controller", "on my way", "tell sam to bring it"]})
         return json.dumps({"replies": ["come back", "you coming", "game's starting"]})
     if slot == "actions":
         lines = {m.group(1): m.group(2) for m in re.finditer(r"^((?:press|type) \d+|open \w+) = (.*)$", user, re.M)}
@@ -508,6 +510,12 @@ async def test_only_the_named_persons_chat_is_offered():
     await friend("can you tell Andrew to come back")
     await g("nod", "select")
     assert "Andrew" in labels() and "Sam" not in labels() and "Mom" not in labels(), labels()
+
+
+async def test_wordings_that_are_not_messages_to_the_person_are_dropped():
+    drafts = await brain._draft_messages(brain.load_profile(), [{"who": "friend", "text": "tell Sam to bring the controller"}],
+                                         "Messages", "Message Sam", "text Sam")
+    assert drafts == ["bring the controller"], drafts
 
 
 async def test_quick_phrases_need_no_model():
