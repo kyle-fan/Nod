@@ -206,6 +206,32 @@ def test_slow_and_fast_cameras():
         FPS = old
 
 
+def test_gestures_survive_camera_jitter():
+    """Every scenario above again, with the kind of frame-to-frame noise a face tracker has."""
+    import random
+    scenarios = [fn for name, fn in sorted(globals().items())
+                 if name.startswith("test_") and callable(fn)
+                 and name not in ("test_gestures_survive_camera_jitter", "test_slow_and_fast_cameras",
+                                  "test_classic_rules_are_still_available_and_show_the_old_weaknesses",
+                                  "test_jittery_camera_does_not_fire_anything")]
+    clean = Trace._step
+    try:
+        for seed in range(6):
+            rnd = random.Random(seed)
+
+            def noisy(self):
+                self.t += 1 / FPS
+                p, r, s, j = self.pose
+                vals = (p + rnd.gauss(0, 0.6), r + rnd.gauss(0, 0.5), max(0, s + rnd.gauss(0, 0.01)), max(0, j + rnd.gauss(0, 0.01)))
+                for e in self.g.feed(self.t, *vals):
+                    self.events.append((round(self.t, 2), e))
+            Trace._step = noisy
+            for fn in scenarios:
+                fn()
+    finally:
+        Trace._step = clean
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in sorted(globals().items()):
