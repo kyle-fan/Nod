@@ -49,4 +49,13 @@ For the 2-minute video, cut beat 3 or 6.
 USE_CAMERA=0 MOCK_SIDECAR=1 .venv/bin/uvicorn hub.main:app --port 8000
 ```
 
-Type the friend's lines in the dev box; `/text Andrew: where are you` for beat 5. The pretend Mac has Andrew, Sam and Mom in Messages and a Yankees link in Safari.
+Type the friend's lines in the dev box; `/text Andrew: where are you` for beat 5. The pretend Mac has Andrew, Sam and Mom in Messages and a Yankees link in Safari. `./rehearse.sh` does the same in one command.
+
+## Watch it play by itself
+
+```bash
+./rehearse.sh                          # terminal 1
+.venv/bin/python tools/autoplay.py     # terminal 2
+```
+
+It plays beats 2, 4, 5 and 6 on the pretend Mac at a pace a viewer can follow (add `ws://127.0.0.1:8000/ws 1.5` to slow it down by half). Useful for learning the story, and for recording clean footage of the screen for the video without needing the camera to cooperate.
