@@ -68,4 +68,7 @@ else
 fi
 
 echo
-echo "Nod is up. Open http://127.0.0.1:8000   (logs: $RUN, stop: ./stop.sh, check: ./doctor.sh)"
+echo "Nod is up. Open http://127.0.0.1:8000   (logs: $RUN, stop: ./stop.sh)"
+echo
+# Say straight away if a permission, a model or a device is going to get in the way.
+[ "${NOD_SKIP_DOCTOR:-0}" = "1" ] || "$ROOT/doctor.sh" || true

@@ -105,6 +105,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 ### Tools
 
 - `./doctor.sh`: checks models on disk, permissions, microphone, camera, sound devices and all three services. With Messages open it also says whether the people in the profile (Andrew) have a chat it can see, which is the thing most likely to trip the demo line.
+- `./start.sh` now ends by running the health check, so a missing permission is the first thing you see.
 - `./start.sh` now starts the hub before the sidecar. Last night the hub turning the camera on stopped the microphone that was already running; this order avoids it, and the sidecar restarts the microphone by itself if it ever goes quiet.
 - **http://127.0.0.1:8000/debug**: a live "under the hood" page. It shows what the camera reads for nod, tilt, smile and mouth against each threshold (so you can see how far your nod actually dips), the microphone level against the speech threshold, how long each Bonsai call took, and a log of every gesture, sentence heard and action. Keep it open while tuning.
 - `./test.sh`: about 75 checks in a few seconds, no model or hardware needed.
@@ -132,7 +133,7 @@ This branch changes `hub/`, `ui/` and `prompts/`, which are yours. Ivan asked fo
 - `hub/gestures.py` (new) holds the gesture rules; `hub/face.py` keeps the thresholds, camera and `--measure`.
 - `prompts/*.txt`: each now has a `=====` line. Keep anything that changes between calls below it, or the cache is lost.
 - `SPEC.md` is updated for every interface change.
-- `tests/` runs the hub against `FakeMac` with a stand-in model, so prompt or logic changes can be checked in seconds.
+- `tests/` runs the hub against `FakeMac` with a stand-in model, so prompt or logic changes can be checked in seconds. On Windows: `python tests/run_all.py`.
 
 ## Known limits
 
