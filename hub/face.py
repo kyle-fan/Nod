@@ -61,6 +61,8 @@ class GestureDetector:
         self.debug = debug
         self._stop = threading.Event()
         self._recal = threading.Event()
+        self.face_ok = False        # a face is in view right now
+        self.calibrating = True     # still learning the neutral pose
 
     def start(self):
         threading.Thread(target=self.run, daemon=True).start()
@@ -72,98 +74,56 @@ class GestureDetector:
         """Re-learn the neutral pose (user shifted in their seat, lighting changed)."""
         self._recal.set()
 
+    def tuning(self):
+        from .gestures import Tuning
+        return Tuning(tilt_deg=TILT_DEG, tilt_reset=TILT_RESET, nod_deg=NOD_DEG, nod_window=NOD_WINDOW,
+                      select_t=SELECT_T, select_hold=SELECT_HOLD, brow_quiet=BROW_QUIET, jaw_t=JAW_T,
+                      jaw_hold=JAW_HOLD, cooldown=COOLDOWN, tilt_repeat=TILT_REPEAT,
+                      select_signal=SELECT_SIGNAL, calibrate_s=CALIBRATE_S)
+
+    def status(self) -> dict:
+        """For the screen: is the camera delivering a face, and is it still learning neutral?"""
+        return {"on": True, "face": self.face_ok, "calibrating": self.calibrating}
+
     def run(self):
-        base = None
-        calib = []
-        t_start = None
-        last_event = tilt_at = 0.0
-        tilt_armed = True
-        sel_since = jaw_since = None
-        sel_armed = jaw_armed = True
-        pitch_hist = deque()  # (t, pitch)
-        recent = deque(maxlen=3)   # median of 3 frames drops single-frame tracking glitches
-        head_moved = 0.0
-
-        def fire(name, now):
-            """False if still cooling down. Callers stay armed then, so the gesture
-            fires a moment later instead of being lost."""
-            nonlocal last_event
-            if now - last_event < COOLDOWN:
-                return False
-            last_event = now
-            print(f"[face] {name}")
-            self.on_event(name)
-            return True
-
-        for now, pitch, roll, brow, jaw, smile, _blink in signals(self.camera_index, self._stop):
+        """The gesture rules live in hub/gestures.py (testable without a camera)."""
+        from .gestures import GestureLogic
+        logic = GestureLogic(self.tuning())
+        was_calibrating = True
+        last_face = time.time()
+        for reading in signals(self.camera_index, self._stop, misses=True):
+            if reading is None:                      # a frame with no face in it
+                if time.time() - last_face > 1.0:
+                    self.face_ok = False
+                continue
+            last_face, self.face_ok = time.time(), True
+            now, pitch, roll, brow, jaw, smile, _blink = reading
             if FLIP_ROLL:
                 roll = -roll
             if FLIP_PITCH:
                 pitch = -pitch
-            sel = brow if SELECT_SIGNAL == "brow" else smile
-            recent.append((pitch, roll, sel, jaw))
-            if len(recent) == 3:
-                pitch, roll, sel, jaw = (sorted(c)[1] for c in zip(*recent))
-
-            # 1) calibrate: sit still, neutral face
             if self._recal.is_set():
                 self._recal.clear()
-                base, calib, t_start = None, [], None
+                logic.recalibrate()
                 print("[face] recalibrating: sit still, neutral face...")
-            if base is None:
-                t_start = t_start or now
-                calib.append((pitch, roll, sel, jaw))
-                if now - t_start > CALIBRATE_S:
-                    base = tuple(sorted(c)[len(c) // 2] for c in zip(*calib))   # median
-                    print("[face] calibrated. Gestures are live.")
-                continue
-            p, r, s, j = pitch - base[0], roll - base[1], sel - base[2], jaw - base[3]
-
-            if self.debug:
-                print(f"pitch {p:+6.1f}  roll {r:+6.1f}  {SELECT_SIGNAL} {s:+.2f}  jaw {j:+.2f}   ", end="\r")
-
-            # 2) tilt left / right: fires once, repeats while held, re-arms at center
-            if abs(r) > TILT_DEG:
-                if tilt_armed or (TILT_REPEAT and now - tilt_at > TILT_REPEAT):
-                    if fire("right" if r > 0 else "left", now):
-                        tilt_armed, tilt_at = False, now
-            elif abs(r) < TILT_RESET:
-                tilt_armed = True
-
-            # 3) nod: pitch dips down then comes back up, with little tilt
-            pitch_hist.append((now, p))
-            while pitch_hist and now - pitch_hist[0][0] > NOD_WINDOW:
-                pitch_hist.popleft()
-            if abs(r) < 8 and p > -3 and any(v < -NOD_DEG for _, v in pitch_hist):
-                if fire("nod", now):
-                    pitch_hist.clear()
-
-            # 4) select: smile (or eyebrows) held briefly. Eyebrows only count with a level
-            #    head, because nods and tilts push the eyebrow reading up on their own.
-            if abs(p) > NOD_DEG * 0.5 or abs(r) > TILT_RESET:
-                head_moved = now
-            steady = SELECT_SIGNAL != "brow" or now - head_moved > BROW_QUIET
-            if s > SELECT_T and steady and sel_armed:
-                sel_since = sel_since or now
-                if now - sel_since > SELECT_HOLD and fire("select", now):
-                    sel_armed = False
-            else:
-                if not steady:
-                    sel_since = None
-                if s < SELECT_T * 0.5:
-                    sel_since, sel_armed = None, True
-
-            # 5) open mouth = cancel (hold)
-            if j > JAW_T and jaw_armed:
-                jaw_since = jaw_since or now
-                if now - jaw_since > JAW_HOLD and fire("cancel", now):
-                    jaw_armed = False
-            elif j < JAW_T * 0.5:
-                jaw_since, jaw_armed = None, True
+            sel = brow if SELECT_SIGNAL == "brow" else smile
+            events = logic.feed(now, pitch, roll, sel, jaw)
+            self.calibrating = logic.calibrating
+            if was_calibrating and not logic.calibrating:
+                print("[face] calibrated. Gestures are live.")
+            was_calibrating = logic.calibrating
+            if self.debug and not logic.calibrating:
+                p, r, s2, j = logic.last
+                print(f"pitch {p:+6.1f}  roll {r:+6.1f}  {SELECT_SIGNAL} {s2:+.2f}  jaw {j:+.2f}   ", end="\r")
+            for name in events:
+                print(f"[face] {name}")
+                self.on_event(name)
+        self.face_ok = False
 
 
-def signals(camera_index: int = 0, stop: threading.Event | None = None):
-    """Yield (time, pitch, roll, brow, jaw, smile, blink) raw for every frame that has a face."""
+def signals(camera_index: int = 0, stop: threading.Event | None = None, misses: bool = False):
+    """Yield (time, pitch, roll, brow, jaw, smile, blink) raw for every frame that has a face.
+    With misses=True, also yield None for frames where no face was found."""
     import cv2
     import mediapipe as mp
     from mediapipe.tasks import python as mp_python
@@ -198,6 +158,8 @@ def signals(camera_index: int = 0, stop: threading.Event | None = None):
             last_ts = max(last_ts + 1, int(time.time() * 1000))  # must strictly increase
             res = landmarker.detect_for_video(img, last_ts)
             if not res.face_blendshapes or not res.facial_transformation_matrixes:
+                if misses:
+                    yield None
                 continue
             bs = {c.category_name: c.score for c in res.face_blendshapes[0]}
             brow = max(bs.get("browInnerUp", 0),

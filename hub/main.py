@@ -54,7 +54,10 @@ class State:
         self.last_said = ""
         self.last_gesture = ""
         self.gesture_n = 0   # counts handled gestures so the UI can react to each one
-        self.stats = {"latency_ms": None, "model": "Bonsai 2 · on-device", "bonsai_ok": True}
+        self.stats = {"latency_ms": None, "model": "Bonsai 2 · on-device", "bonsai_ok": True,
+                      "sidecar_ok": True}
+        # camera: on = gestures come from the webcam; face = a face is in view right now
+        self.camera = {"on": False, "face": False, "calibrating": False}
         self.in_computer = False
         self.screen: dict = {}
         self.pending: dict | None = None   # action waiting for confirmation
@@ -69,7 +72,7 @@ class State:
     def view(self):
         return {k: getattr(self, k) for k in
                 ("mode", "status", "tiles", "index", "history", "partial",
-                 "last_gesture", "gesture_n", "stats", "in_computer")}
+                 "last_gesture", "gesture_n", "stats", "in_computer", "camera")}
 
 
 S = State()
@@ -441,6 +444,16 @@ async def index():
     return FileResponse(config.UI_DIR / "index.html")
 
 
+async def watch_camera():
+    """Tell the screen when the camera loses the face or is learning the neutral pose."""
+    while True:
+        status = app.state.detector.status()
+        if status != S.camera:
+            S.camera = status
+            await broadcast()
+        await asyncio.sleep(0.4)
+
+
 @app.on_event("startup")
 async def startup():
     if config.USE_CAMERA:
@@ -451,4 +464,5 @@ async def startup():
             camera_index=config.CAMERA_INDEX,
         )
         app.state.detector.start()
+        asyncio.create_task(watch_camera())
     print(f"[hub] mock sidecar: {config.MOCK_SIDECAR}  camera: {config.USE_CAMERA}")
