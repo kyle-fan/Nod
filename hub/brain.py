@@ -1,4 +1,5 @@
 """Bonsai calls: turn context into 3 options. Prompts live in prompts/*.txt."""
+import difflib
 import json
 import re
 import time
@@ -54,6 +55,36 @@ def friend_said(history: list[dict]) -> str:
             break          # an earlier turn
         # his own lines after the request ("one sec") are skipped
     return " ".join(reversed(lines))
+
+
+def demo_guide(kind: str, line: str) -> list[str]:
+    """The three options scripted for this line in prompts/demo.json ("talk", "text_in" or
+    "pass_on"), or [] when the line is not one of the rehearsed ones or DEMO_GUIDE=0."""
+    if not config.DEMO_GUIDE or not line:
+        return []
+    try:
+        scenes = json.loads(config.DEMO_PATH.read_text(encoding="utf-8")).get(kind, [])
+    except (OSError, ValueError):
+        return []
+    low = re.sub(r"\s+", " ", line.lower())
+
+    def has(w: str) -> bool:      # at the start of a word: "eat" is in "eating", not in "seat"
+        return re.search(r"\b" + re.escape(w.strip().lower()), low) is not None
+    for sc in scenes:
+        if (all(has(w) for w in sc.get("all", [])) and (not sc.get("any") or any(has(w) for w in sc["any"]))
+                and not any(has(w) for w in sc.get("none", []))):
+            return [str(x) for x in sc.get("say", [])][:3]
+    return []
+
+
+def _guide_text(guide: list[str]) -> str:
+    return ("For this exact line he would give these three options, in this order: "
+            + " | ".join(f'"{g}"' for g in guide) + ". Return them as written.\n") if guide else ""
+
+
+def _guided(replies: list[str], guide: list[str]) -> list[str]:
+    """With a demo guide the three options are the guide's, in its order."""
+    return list(guide) if guide else replies
 
 
 def load_learned() -> list[dict]:
@@ -330,6 +361,11 @@ async def suggest_replies(history: list[dict], kind: str | None = None,
         instr.append(f'"{path[-1]}" means he wants to put that question to the friend. Each option is the '
                      'short question itself, said to the friend, like "when do you need it?" or "who else is '
                      'going?". Never start with the word "ask", and never answer the question yourself.')
+    # the demo's rehearsed lines: only on the first plain nod, never for "More..." or other answers
+    guide = demo_guide("request" if offer else "talk", friend_said(history)) if not (kind or path or avoid) \
+        and history and history[-1]["who"] == "friend" else []
+    if guide:
+        instr.append(_guide_text(guide).strip())
     instr = "\n".join(f"- {x}" for x in instr if x)
     prompt = _prompt("reply.txt", name=p["name"], profile=_profile_text(p),
                      style=_style_text(p), examples=_examples_text(p),
@@ -366,7 +402,7 @@ async def suggest_replies(history: list[dict], kind: str | None = None,
         print(f"[brain] Bonsai error: {e}")
         replies, ok = ["Yes", "No", "Give me a second"], False
     ms = int((time.perf_counter() - t0) * 1000)
-    return (replies + ["Yes", "No", "Hmm"])[:3], ms, ok
+    return (_guided(replies, guide) + ["Yes", "No", "Hmm"])[:3], ms, ok
 
 
 async def suggest_text_replies(history: list[dict], who: str, text: str,
@@ -374,13 +410,14 @@ async def suggest_text_replies(history: list[dict], who: str, text: str,
     """3 answers to a text message that just came in. Returns (replies, ms, ok)."""
     p = load_profile()
     spoken = [t for t in history if t["who"] in ("friend", "me")][-4:]
+    guide = [] if avoid else demo_guide("text_in", text)
     prompt = _prompt("textreply.txt", name=p["name"], profile=_profile_text(p), style=_style_text(p),
                      history=_history_text(spoken, p["name"]), who=who, text=text.replace('"', "'"),
                      # Listing the rejected answers makes Bonsai copy them back. Asking for new
                      # angles works; anything that still repeats is filtered out below.
                      avoid=("You already offered 3 answers and none was right. These 3 must take other "
                             "angles: one sets a condition, one gives a reason, one makes a different "
-                            "suggestion.\n") if avoid else "")
+                            "suggestion.\n") if avoid else _guide_text(guide))
     t0 = time.perf_counter()
     try:
         out = await _chat(prompt, max_tokens=120, schema=REPLY_SCHEMA, slot="textreply",
@@ -393,7 +430,7 @@ async def suggest_text_replies(history: list[dict], who: str, text: str,
         print(f"[brain] Bonsai error: {e}")
         replies, ok = [], False
     ms = int((time.perf_counter() - t0) * 1000)
-    return (replies + ["yeah", "not right now", "give me a minute"])[:3], ms, ok
+    return (_guided(replies, guide) + ["yeah", "not right now", "give me a minute"])[:3], ms, ok
 
 
 async def suggest_new_texts(history: list[dict], who: str,
@@ -496,6 +533,23 @@ TYPEABLE = ("textfield", "textarea", "searchfield", "combobox")
 SEND_WORDS = ("send", "post", "submit")
 
 
+MESSAGING = re.compile(r"\b(text|texts|texting|tell|ask|message|msg|remind|reply|answer|respond|send|invite|"
+                       r"let\s+\w+(\s+\w+)?\s+know|say\s+(hi|hey|hello|thanks|sorry)|check with|write to|write back)\b", re.I)
+
+
+def _this_request(history: list[dict]) -> list[dict]:
+    """The turns that say what the task is: the friend's newest request (it may have arrived in
+    pieces) and what he answered. Earlier talk and texts are left out, so a task about the game
+    is not mistaken for another text to whoever was texted a minute ago."""
+    start = None
+    for i in range(len(history) - 1, -1, -1):
+        if history[i]["who"] == "friend":
+            start = i
+        elif start is not None and history[i]["who"] != "friend":
+            break
+    return history[start:] if start is not None else history
+
+
 def _step_choices(elements: list[dict], apps: list[str]) -> dict[str, dict]:
     """Every step that is possible right now, keyed by the short line Bonsai copies.
     Short lines keep the answer small: Bonsai writes about 30 tokens instead of 100,
@@ -548,7 +602,7 @@ async def suggest_actions(history: list[dict], screen: dict, done: list[str] | N
              else '{"finished": false, "steps": ["...", "...", "..."]}')
     prompt = _prompt("actions.txt", name=p["name"], profile=_profile_text(p),
                      habits="\n".join(f"- {x}" for x in p.get("computer", [])) or "(none)",
-                     history=_history_text(history, p["name"]),
+                     history=_history_text(_this_request(history), p["name"]),
                      goal_line="" if with_goal else f'Goal: {info["goal"]} (needs {info["app"]})\n\n',
                      app=app,
                      elements="\n".join([line(e) for e in elements]
@@ -569,6 +623,15 @@ async def suggest_actions(history: list[dict], screen: dict, done: list[str] | N
             info["goal"], info["app"] = str(data.get("goal", "")).strip(), data.get("app") or app
         info["finished"] = bool(data.get("finished")) and bool(done)
         need = info["app"]
+        said = friend_said(history)
+        if with_goal and need == "Messages" and said and not MESSAGING.search(said):
+            # Nothing in the request is about telling anyone anything ("pull up the game"), yet
+            # Bonsai made it a text because Messages is in front. It belongs in the other app.
+            other = next((a for a in p.get("apps", []) if a != "Messages"), None)
+            if other:
+                need = info["app"] = other
+                info["goal"] = re.sub(r"^(hey,?\s+)?((can|could|would|will) you|please)\s+(please\s+)?", "",
+                                      said.strip(), flags=re.I).strip(" ?.!")[:70]
         print(f'[brain] goal: {info["goal"]}  app: {need}  finished: {info["finished"]}')
         if need in apps:   # the task lives in another app: opening it is the first step
             seen.add(("open_app", None, need))
@@ -832,6 +895,7 @@ def _second_person(text: str) -> str:
 
 async def _draft_messages(p: dict, history: list[dict], app: str, field: str, goal: str,
                           avoid: list[str] | None = None) -> list[str]:
+    guide = demo_guide("pass_on", friend_said(history)) if not avoid and "your answer to" not in field else []
     prompt = _prompt("message.txt", name=p["name"], profile=_profile_text(p), style=_style_text(p),
                      examples="\n".join(
                          f'Friend said: "{t["friend"]}"\nYou texted {t["to"]}: ' + " / ".join(t["texts"])
@@ -840,9 +904,11 @@ async def _draft_messages(p: dict, history: list[dict], app: str, field: str, go
                      goal=goal or "(see the conversation)",
                      avoid=("You already offered wordings and none was right. Say the same thing in "
                             "3 new ways: one shorter, one with a few more words, one put as a question.\n")
-                     if avoid else "")
+                     if avoid else _guide_text(guide))
     out = await _chat(prompt, max_tokens=120, schema=REPLY_SCHEMA, slot="message")
     drafts = [str(r).strip() for r in _parse_json(out, "replies") if str(r).strip()]
+    if guide:
+        return _guided(drafts, guide)
     if "your answer to" not in field:     # passing something on: it is said to them, not about them
         who = field[len("Message "):].strip().lower() if field.startswith("Message ") else ""
         names = [w for w in {who, who.split()[0] if who else ""} if len(w) > 2]

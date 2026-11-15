@@ -21,6 +21,30 @@ Keep the Chrome tab (http://127.0.0.1:8000) open on a second desktop: the keyboa
 
 On the camera, opening the mouth means "my turn" and a nod means back (swapped Sunday morning; `NOD_SWAP=0` undoes it). Where the beats say nod, open your mouth.
 
+## The demo guide (scripted lines)
+
+For the demo, the lines below are guided by `prompts/demo.json`: Bonsai is told which three options to give for them and the hub keeps those three, in that order. Anything else anyone says is still left to Bonsai, and so are "More...", "Other answers", the computer steps and who a text goes to. `DEMO_GUIDE=0 ./start.sh` (or deleting the file) turns it off. Edit the file to change a wording; no restart needed.
+
+| Say or send this (wording can vary, the key words matter) | The three tiles |
+|---|---|
+| "Do you want to get **lunch**?" / "Are you **hungry**?" | yeah, I'm starving / sure, where were you thinking / nah, I'm good for now |
+| "**Thai** or **pizza**, or anything else?" | thai sounds good / pizza, honestly / either works, you pick |
+| "Want to watch the **Yankees** game tonight?" | yeah, I'm in / what time does it start / nah, not tonight |
+| Any request to do something ("can you text...", "can you put...") | yeah, one sec / sure, give me a minute / not right now |
+| "Can you text Andrew and ask if he wants to come to **lunch**?" | want to come get lunch with us / we're getting lunch, you in / getting lunch, want to come |
+| "Can you tell Andrew we're getting **thai**?" (or pizza) | we're getting thai for lunch / getting thai, want to come / thai for lunch, you in |
+| "The game's about to start, can you tell Andrew to **come back**?" | game's starting, come back / game's about to start, where are you / come back, the game's on |
+| "Can you **put the Yankees game on**?" | Open Safari, then the Yankees link, Play, Done (chosen by Bonsai from the screen, not scripted) |
+| Text in: "are we still getting **lunch**?" | yeah, still down / can we push it a bit / nah, something came up |
+| Text in: "**where** do you want to **eat**?" | thai sounds good / pizza works / you pick, anything but seafood |
+| Text in: "**what time** is **lunch**?" | whenever you're ready / give me ten minutes / what time works for you |
+| Text in: "**thai** or **pizza**?" | thai / pizza / either works, you pick |
+| Text in: "is the **game** on yet?" | starting soon, come back / yeah, it's on / not yet |
+| Text in: "want me to **bring** anything?" | yeah, grab some snacks / nah, we're good / what are you getting |
+| Text in: "**on my way** back" | cool, see you soon / hurry up, it's starting / saved you a seat |
+
+Works with any contact name. If a judge asks: these rehearsed lines are steered so the demo is repeatable; say something off-script to show Bonsai unguided.
+
 ## The beats
 
 | # | What happens | What to say (voice-over or presenter) | Time |

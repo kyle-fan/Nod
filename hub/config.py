@@ -46,3 +46,8 @@ SWAP_NOD_MOUTH = os.getenv("NOD_SWAP", "1") == "1"
 # NOD_GESTURES=classic: the older gesture rules (neutral learned once, no drift following).
 # Can also be switched while running, with the dev bar's checkbox or POST /settings.
 CLASSIC_GESTURES = os.getenv("NOD_GESTURES", "").lower() == "classic"
+
+# DEMO_GUIDE=1: for the lines rehearsed in the demo (prompts/demo.json), Bonsai is told which
+# three options to give and the hub keeps them. DEMO_GUIDE=0 leaves everything to Bonsai.
+DEMO_GUIDE = os.getenv("DEMO_GUIDE", "1") == "1"
+DEMO_PATH = ROOT / "prompts" / "demo.json"

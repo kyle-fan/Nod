@@ -1,0 +1,51 @@
+{
+  "_about": "Demo guide. For the lines we rehearse in the demo, Bonsai is told which three options to give, and the hub keeps them in this order. Everything else is left to Bonsai. Switch off with DEMO_GUIDE=0 ./start.sh, or delete this file. A scene matches when every word in 'all' and at least one in 'any' is in the line and none of 'none' is. The first match wins. 'talk' = the friend's spoken line, 'request' = the friend asks him to do something on the Mac, 'text_in' = a text that arrives, 'pass_on' = the friend asks him to text someone.",
+
+  "talk": [
+    {"name": "thai or pizza", "any": ["thai", "pizza"], "none": ["tell ", "text ", "ask "],
+     "say": ["thai sounds good", "pizza, honestly", "either works, you pick"]},
+    {"name": "what to eat", "any": ["feel like eating", "want to eat", "where do you want", "what do you want", "anything else", "what sounds good"], "none": ["tell ", "text ", "ask "],
+     "say": ["thai sounds good", "pizza works for me", "whatever's close, I'm starving"]},
+    {"name": "lunch?", "any": ["lunch", "hungry", "grab food", "get food", "something to eat", "grab a bite"], "none": ["tell ", "text ", "ask "],
+     "say": ["yeah, I'm starving", "sure, where were you thinking", "nah, I'm good for now"]},
+    {"name": "watch the game?", "any": ["yankees", "the game"], "none": ["tell ", "text ", "ask ", "put ", "turn "],
+     "say": ["yeah, I'm in", "what time does it start", "nah, not tonight"]}
+  ],
+
+  "request": [
+    {"name": "the friend asks him to do something on the Mac (the first option starts the task)",
+     "say": ["yeah, one sec", "sure, give me a minute", "not right now"]}
+  ],
+
+  "text_in": [
+    {"name": "thai or pizza", "any": ["thai", "pizza"],
+     "say": ["thai", "pizza", "either works, you pick"]},
+    {"name": "where to eat", "all": ["where"], "any": ["eat", "lunch", "food", "go"],
+     "say": ["thai sounds good", "pizza works", "you pick, anything but seafood"]},
+    {"name": "what time is lunch", "any": ["what time", "when"], "all": ["lunch"],
+     "say": ["whenever you're ready", "give me ten minutes", "what time works for you"]},
+    {"name": "lunch still on", "any": ["lunch", "eat", "hungry", "food"],
+     "say": ["yeah, still down", "can we push it a bit", "nah, something came up"]},
+    {"name": "bring anything", "any": ["bring", "need anything", "want anything"],
+     "say": ["yeah, grab some snacks", "nah, we're good", "what are you getting"]},
+    {"name": "on my way", "any": ["on my way", "omw", "coming back", "be there", "save me a seat"],
+     "say": ["cool, see you soon", "hurry up, it's starting", "saved you a seat"]},
+    {"name": "is the game on", "any": ["game", "yankees", "score"],
+     "say": ["starting soon, come back", "yeah, it's on", "not yet"]},
+    {"name": "where are you", "all": ["where"], "any": ["are you", "r u", "you at"],
+     "say": ["in my room", "at the dorm, come by", "why, what's up"]}
+  ],
+
+  "pass_on": [
+    {"name": "thai for lunch", "all": ["thai"],
+     "say": ["we're getting thai for lunch", "getting thai, want to come", "thai for lunch, you in"]},
+    {"name": "pizza for lunch", "all": ["pizza"],
+     "say": ["we're getting pizza for lunch", "getting pizza, want to come", "pizza for lunch, you in"]},
+    {"name": "come to lunch", "any": ["lunch", "eat", "food"],
+     "say": ["want to come get lunch with us", "we're getting lunch, you in", "getting lunch, want to come"]},
+    {"name": "come back, game starting", "any": ["come back", "get back", "hurry"],
+     "say": ["game's starting, come back", "game's about to start, where are you", "come back, the game's on"]},
+    {"name": "watching the game with us", "any": ["game", "yankees"],
+     "say": ["want to watch the yankees game with us", "yankees game tonight, you in", "are you watching the game with us"]}
+  ]
+}

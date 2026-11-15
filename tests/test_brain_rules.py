@@ -145,6 +145,46 @@ def test_history_shows_texts():
                                 '(Theo texted Andrew: "in my room")', "Theo: yeah"]
 
 
+def test_demo_guide_matches_the_rehearsed_lines_and_nothing_else():
+    from hub import config
+    old, config.DEMO_GUIDE = config.DEMO_GUIDE, True
+    try:
+        g = brain.demo_guide
+        assert g("talk", "hey, do you want to get lunch?")[0] == "yeah, I'm starving"
+        assert g("talk", "do you want thai or pizza, or anything else?") == ["thai sounds good", "pizza, honestly", "either works, you pick"]
+        assert g("talk", "want to watch the Yankees game tonight?")[0] == "yeah, I'm in"
+        assert g("talk", "can you put the Yankees game on") == []          # a request is not small talk
+        assert g("talk", "can you tell Andrew to come back for lunch") == []
+        assert g("talk", "my grandma's in the hospital") == []
+        assert g("text_in", "are we still getting lunch?")[0] == "yeah, still down"
+        assert g("text_in", "on my way back, save me a seat")[0] == "cool, see you soon"   # "seat" is not "eat"
+        assert g("text_in", "can I borrow your charger") == []
+        assert g("pass_on", "the game's about to start, can you tell Andrew to come back")[0] == "game's starting, come back"
+        assert g("pass_on", "can you tell Andrew we're getting thai for lunch")[0] == "we're getting thai for lunch"
+        assert g("pass_on", "tell Sam to bring the controller") == []
+        assert g("request", "can you put the Yankees game on")[0] == "yeah, one sec"
+        for kind in ("talk", "request", "text_in", "pass_on"):       # every scripted line fits the tile and has no "!"
+            import json
+            for sc in json.loads(config.DEMO_PATH.read_text())[kind]:
+                assert len(sc["say"]) == 3 and all(len(x) <= 70 and "!" not in x for x in sc["say"]), sc
+        config.DEMO_GUIDE = False
+        assert g("talk", "hey, do you want to get lunch?") == []
+    finally:
+        config.DEMO_GUIDE = old
+
+
+def test_only_the_newest_request_decides_the_task():
+    h = [{"who": "friend", "text": "can you tell Andrew to come to lunch"}, {"who": "me", "text": "sure"},
+         {"who": "me_text", "to": "Andrew", "text": "want lunch"}, {"who": "text", "from": "Andrew", "text": "yes"},
+         {"who": "friend", "text": "can you put"}, {"who": "friend", "text": "the Yankees game on"}, {"who": "me", "text": "one sec"}]
+    assert [t["text"] for t in brain._this_request(h)] == ["can you put", "the Yankees game on", "one sec"]
+    assert brain._this_request(h[:2]) == h[:2] and brain._this_request([]) == []
+    for line in ("can you tell Andrew to come back", "text Sam we're late", "let mom know I'll call", "ask him if he wants pizza"):
+        assert brain.MESSAGING.search(line), line
+    for line in ("can you put the Yankees game on", "pull up the game", "look up the score", "open Safari"):
+        assert not brain.MESSAGING.search(line), line
+
+
 def test_step_codes():
     c = brain._step_choices(LIST[:4], ["Safari"])
     assert list(c) == ["press 1", "press 2", "press 3", "type 4", "open Safari"]

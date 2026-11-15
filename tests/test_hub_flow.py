@@ -11,7 +11,7 @@ import re
 import sys
 from pathlib import Path
 
-os.environ.update(MOCK_SIDECAR="1", USE_CAMERA="0", NOD_SWAP="0")   # the tests use nod = my turn; the swap has its own test
+os.environ.update(MOCK_SIDECAR="1", USE_CAMERA="0", NOD_SWAP="0", DEMO_GUIDE="0")   # the tests use nod = my turn; the swap has its own test
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from hub import brain, config, main, sidecar   # noqa: E402
 
