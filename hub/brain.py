@@ -626,10 +626,24 @@ VAGUE = {"him", "her", "them", "someone", "somebody", "everyone", "people", "the
 
 def _goal_person(goal: str) -> str:
     """Who a messaging goal is for: "text Andrew: come back" -> "Andrew". "" if it doesn't say."""
-    m = re.match(r"^(?:text|tell|ask|message|reply to|answer)\s+(.+?)(?:'s text.*)?(?::.*)?$", goal.strip(), flags=re.I)
+    m = re.match(r"^(?:text|tell|ask|message|reply to|answer|respond to)\s+(.+)$", goal.strip(), flags=re.I)
     if not m:
         return ""
-    who = re.sub(r"^(my|his|your)\s+", "", m.group(1).strip(), flags=re.I)
+    rest = re.sub(r"^(my|his|your)\s+", "", m.group(1).strip(), flags=re.I)
+    if ":" in rest:
+        who = rest.split(":")[0]
+    elif "'s " in rest:                       # "Sammy Tong's text"
+        who = rest.split("'s ")[0]
+    else:                                     # "Zoe happy birthday": the name is the capitalised start
+        words = rest.split()
+        lead = []
+        for w in words[:3]:
+            if w[:1].isupper():
+                lead.append(w)
+            else:
+                break
+        who = " ".join(lead) if lead else (words[0] if words else "")
+    who = re.sub(r"'s$", "", who.strip())
     return "" if not who or who.lower() in VAGUE or len(who.split()) > 3 else who
 
 

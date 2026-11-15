@@ -45,6 +45,9 @@ def test_goal_person():
     assert g("reply to Sammy Tong's text") == "Sammy Tong"
     assert g("text my mom: running late") == "mom"
     assert g("text him: come back") == "" and g("put the game on") == "" and g("look up the score") == ""
+    assert g("text Zoe happy birthday") == "Zoe" and g("text Quentin hi") == "Quentin"
+    assert g("text mom happy birthday") == "mom" and g("reply to Andrew") == "Andrew"
+    assert g("text Caden Ruan: come back") == "Caden Ruan" and g("respond to Tiffany Sun's message") == "Tiffany Sun"
 
 
 def test_same_person():
