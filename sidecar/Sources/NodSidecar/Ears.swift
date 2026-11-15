@@ -49,6 +49,7 @@ final class Ears: @unchecked Sendable {
     private var micStarted = false
     private var vocabulary = ""
     private var hintTokens: [ObjectIdentifier: [Int]] = [:]
+    private var hintWords: Set<String> = []
     private var lastBufferAt = Date()
     private var micRestarts = 0
 
@@ -343,7 +344,8 @@ final class Ears: @unchecked Sendable {
     /// "Yankees" is not heard as "youngies" in a noisy room. Empty = no hint.
     func setVocabulary(_ words: [String]) {
         let hint = words.isEmpty ? "" : " " + words.joined(separator: ", ") + "."
-        lock.withLock { vocabulary = hint; hintTokens = [:] }
+        let set = Set(Ears.normalize(words.joined(separator: " ")).split(separator: " ").map(String.init))
+        lock.withLock { vocabulary = hint; hintTokens = [:]; hintWords = set }
     }
 
     private func hint(for model: WhisperKit) -> [Int]? {
@@ -369,7 +371,13 @@ final class Ears: @unchecked Sendable {
             let t0 = Date()
             let results = try await model.transcribe(audioArray: audio, decodeOptions: options)
             if debug { print(String(format: "[sidecar] \(model === whisper ? "final" : "fast") transcribe %.2fs audio in %.2fs", Double(audio.count) / Ears.sampleRate, Date().timeIntervalSince(t0))) }
-            return NameBook.shared.correct(Ears.clean(results.map(\.text).joined(separator: " ")))
+            let text = Ears.clean(results.map(\.text).joined(separator: " "))
+            // On unclear sound Whisper can echo the hint itself ("Theo, Andrew, Yankees").
+            // Nobody says only those words in a row, so that is dropped.
+            let said = Ears.normalize(text).split(separator: " ").map(String.init)
+            let hints = lock.withLock { hintWords }
+            if said.count >= 2, !hints.isEmpty, said.allSatisfy({ hints.contains($0) }) { return "" }
+            return NameBook.shared.correct(text)
         } catch {
             print("[sidecar] transcribe failed: \(error)")
             return ""
