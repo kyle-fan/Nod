@@ -660,6 +660,8 @@ async def pick(tile):
         await send_text(S.text_to, tile["value"])
     elif k == "newtextmore":
         await show_new_texts()
+    elif k in ("textreply", "textmore") and not S.incoming:
+        go_listen()                      # the text these tiles were for is gone
     elif k == "textreply":
         await send_text(S.incoming["from"], tile["value"])
     elif k == "textmore":
