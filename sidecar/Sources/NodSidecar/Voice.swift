@@ -35,6 +35,11 @@ actor Voice {
     private let tts: TTSKit
     private let speaker: Qwen3Speaker
     private let instruction: String?
+    /// Test mode: generate the speech and wait as long as it would take to play, but make no sound.
+    private var silent = ProcessInfo.processInfo.environment["NOD_SILENT"] == "1"
+
+    func setSilent(_ on: Bool) { silent = on }
+    var isSilent: Bool { silent }
 
     static func modelsRoot() -> URL {
         FileManager.default.homeDirectoryForCurrentUser
@@ -85,6 +90,13 @@ actor Voice {
         // TTSKit's .auto strategy sizes its pre-buffer for the 20 s maximum utterance (~2 s of
         // silence before a short reply). Our replies are short, so size it for this text:
         // generation runs ~10% slower than real time, budget 20% of the estimated length.
+        if silent {
+            let result = try await tts.generate(text: text, speaker: speaker, language: .english, options: options())
+            let generated = Date().timeIntervalSince(start)
+            let remaining = result.audioDuration + 0.5 - generated
+            if remaining > 0 { try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000)) }
+            return (result.audioDuration, 0.5, Date().timeIntervalSince(start))
+        }
         let words = Double(text.split(separator: " ").count)
         let estimatedSeconds = words * 0.45 + 0.8
         let buffer = min(2.0, max(0.25, estimatedSeconds * 0.2))

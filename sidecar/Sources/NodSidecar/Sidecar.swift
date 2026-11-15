@@ -123,13 +123,20 @@ func runSidecar() async throws {
         guard !text.isEmpty else { return fail("missing text", status: .badRequest) }
         do {
             let t = try await voice.speak(text)
-            log(String(format: "spoke %.1fs of audio, first audio %.2fs, total %.2fs: %@",
+            log(String(format: "\(await voice.isSilent ? "(silent) " : "")spoke %.1fs of audio, first audio %.2fs, total %.2fs: %@",
                        t.audioSeconds, t.firstAudio, t.total, text))
             return json(["ok": true])
         } catch {
             log("speak failed: \(error)")
             return fail("\(error)", status: .internalServerError)
         }
+    }
+
+    // Test mode: POST /quiet?on=1 makes /speak silent (same timing, no sound); on=0 restores it.
+    await server.appendRoute("POST /quiet") { request in
+        let on = request.query.first(where: { $0.name == "on" })?.value != "0"
+        await voice.setSilent(on)
+        return json(["ok": true, "silent": on])
     }
 
     // MARK: Hands (Accessibility API)
