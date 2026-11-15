@@ -745,6 +745,28 @@ async def test_more_narrows_down():
     assert S.mode == "choose" and labels()[-1] == "More..."
 
 
+async def test_malformed_page_messages_do_not_close_the_connection():
+    await fresh()
+    from fastapi import WebSocketDisconnect
+
+    class FakeSocket:
+        def __init__(self, incoming):
+            self.incoming, self.sent = list(incoming), []
+        async def accept(self): pass
+        async def send_json(self, data): self.sent.append(data)
+        async def receive_text(self):
+            if not self.incoming:
+                raise WebSocketDisconnect()
+            return self.incoming.pop(0)
+
+    ws = FakeSocket(['not json', '[]', '5', '{}', '{"type":"pick","index":"a"}', '{"type":"gesture","name":5}',
+                     '{"type":"heard","text":"want to grab food"}'])
+    await main.ws_endpoint(ws)
+    await asyncio.sleep(0.05)
+    assert ws not in main.clients                       # tidied up when the page went away
+    assert S.history[-1]["text"] == "want to grab food"  # the good message after the bad ones still arrived
+
+
 async def test_open_mouth_goes_back():
     await fresh()
     await friend("want to grab food")

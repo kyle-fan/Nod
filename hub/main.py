@@ -5,6 +5,7 @@
 Then open http://127.0.0.1:8000
 """
 import asyncio
+import json
 import time
 
 import httpx
@@ -848,28 +849,45 @@ async def ws_endpoint(ws: WebSocket):
     await ws.send_json(S.view())
     try:
         while True:
-            msg = await ws.receive_json()
-            if msg.get("type") == "gesture":
-                asyncio.create_task(on_gesture(msg["name"]))
-            elif msg.get("type") == "heard":   # dev box: type what the friend said
-                await heard(Heard(text=msg.get("text", ""), final=True))
-            elif msg.get("type") == "settings":
-                await set_settings({k: msg[k] for k in ("express", "learn", "classic_gestures") if k in msg})
-            elif msg.get("type") == "pick":
-                asyncio.create_task(on_pick(int(msg.get("index", -1))))
-            elif msg.get("type") == "incoming":   # dev box: "/text Andrew: where are you"
-                await incoming({"from": msg.get("from", ""), "text": msg.get("text", "")})
-            elif msg.get("type") == "recalibrate":
-                await recalibrate()
-            elif msg.get("type") == "reset":
-                S.history.clear()
-                S.incoming, S.pregen, S.paused = None, None, False
-                start_task()
-                sidecar.FAKE.reset()
-                go_listen()
-                await broadcast()
+            try:
+                msg = json.loads(await ws.receive_text())
+            except ValueError:
+                continue                        # not JSON: ignore it, keep the connection
+            if not isinstance(msg, dict):
+                continue
+            try:
+                await ws_message(msg)
+            except WebSocketDisconnect:
+                raise
+            except Exception as e:  # noqa: BLE001  one bad message must not close the page's connection
+                note("error", f"bad message {str(msg)[:60]}: {e!r}")
     except WebSocketDisconnect:
+        pass
+    finally:
         clients.discard(ws)
+
+
+async def ws_message(msg: dict):
+    kind = msg.get("type")
+    if kind == "gesture":
+        asyncio.create_task(on_gesture(str(msg.get("name", ""))))
+    elif kind == "heard":   # dev box: type what the friend said
+        await heard(Heard(text=str(msg.get("text") or ""), final=True))
+    elif kind == "settings":
+        await set_settings({k: msg[k] for k in ("express", "learn", "classic_gestures") if k in msg})
+    elif kind == "pick":
+        asyncio.create_task(on_pick(int(msg.get("index", -1))))
+    elif kind == "incoming":   # dev box: "/text Andrew: where are you"
+        await incoming({"from": msg.get("from", ""), "text": msg.get("text", "")})
+    elif kind == "recalibrate":
+        await recalibrate()
+    elif kind == "reset":
+        S.history.clear()
+        S.incoming, S.pregen, S.paused = None, None, False
+        start_task()
+        sidecar.FAKE.reset()
+        go_listen()
+        await broadcast()
 
 
 def settings_view():
