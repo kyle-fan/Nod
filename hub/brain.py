@@ -85,11 +85,12 @@ INTENT_SCHEMA = {
 }
 
 
-async def _chat(prompt: str, max_tokens: int = 220, schema: dict | None = None) -> str:
+async def _chat(prompt: str, max_tokens: int = 220, schema: dict | None = None,
+                temperature: float = 0.7) -> str:
     payload = {
         "model": config.BONSAI_MODEL,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.7,
+        "temperature": temperature,
         "max_tokens": max_tokens,
         # Bonsai 2 reasons by default; turn it off for fast replies.
         "chat_template_kwargs": {"enable_thinking": False},
@@ -203,6 +204,56 @@ async def suggest_intents(history: list[dict], path: list[str], rejected: list[s
         question, options, ok = "", [], False
     ms = int((time.perf_counter() - t0) * 1000)
     return question, options[:3], ms, ok
+
+
+# ---------- spelling: context-aware abbreviation expansion ----------
+# After SpeakFaster (Cai et al., NAACL 2022; Nature Communications 2024): the user types only the
+# first letter of each word, plus any word they want to pin down spelled out in full, and the LLM
+# expands it using the conversation. The pattern below grammar-constrains Bonsai to the letters.
+
+SPELL_TEMPERATURE = 0.2   # low: we want the most common phrase for the letters, not a creative one
+
+
+def _ci(word: str) -> str:
+    return "".join(f"[{c.upper()}{c.lower()}]" if c.isalpha() else re.escape(c) for c in word)
+
+
+def spell_pattern(words: list[str], initials: str) -> str:
+    """Regex a reply must match: the spelled words in order, then one word per initial.
+    With no initials yet, up to 6 more words may follow (he may not be done)."""
+    parts = [_ci(w) for w in words] + [f"[{c.upper()}{c.lower()}][A-Za-z'-]*" for c in initials]
+    tail = "" if initials else "(,? [A-Za-z'-]+){0,6}"
+    return "^" + ",? ".join(parts) + tail + "[.?!]?$"
+
+
+async def expand_initials(history: list[dict], words: list[str],
+                          initials: str) -> tuple[list[str], int, bool]:
+    """words: spelled out in full; initials: first letter of each following word.
+    Returns (up to 3 replies that fit the letters, latency_ms, ok)."""
+    p = load_profile()
+    slots = [f'{i}. "{w}" (spelled out, use exactly)' for i, w in enumerate(words, 1)]
+    slots += [f"{i}. a word starting with {c.upper()}" for i, c in enumerate(initials, len(words) + 1)]
+    tail = (f"- Exactly {len(slots)} words, no more, no fewer." if initials else
+            "- He may not be done: you can add up to 6 more words after these.")
+    pattern = spell_pattern(words, initials)
+    schema = {"type": "object", "required": ["replies"], "properties": {"replies": {
+        "type": "array", "items": {"type": "string", "pattern": pattern}, "minItems": 3, "maxItems": 3}}}
+    prompt = _prompt("spell.txt", name=p["name"], profile=_profile_text(p), style=_style_text(p),
+                     history=_history_text(history, p["name"]), slots="\n".join(slots), tail=tail)
+    t0 = time.perf_counter()
+    try:
+        out = await _chat(prompt, max_tokens=120, schema=schema, temperature=SPELL_TEMPERATURE)
+        replies, ok = [str(r).strip() for r in _parse_json(out, "replies")], True
+    except Exception as e:
+        print(f"[brain] Bonsai error: {e}")
+        replies, ok = [], False
+    ms = int((time.perf_counter() - t0) * 1000)
+    seen, keep = set(), []
+    for r in replies:   # belt and braces: drop anything that doesn't fit, and duplicates
+        if re.fullmatch(pattern, r) and r.lower() not in seen:
+            seen.add(r.lower())
+            keep.append(re.sub(r"\bi\b", "I", r[0].upper() + r[1:]))
+    return keep[:3], ms, ok
 
 
 TYPEABLE = ("textfield", "textarea", "searchfield", "combobox")

@@ -18,14 +18,16 @@ app = FastAPI()
 HOME_TILES = [
     {"label": "Talk", "kind": "home", "value": "talk"},
     {"label": "Use computer", "kind": "home", "value": "computer"},
+    {"label": "Spell", "kind": "spell"},
     {"label": "Repeat last", "kind": "home", "value": "repeat"},
     {"label": "Back", "kind": "home", "value": "back"},
 ]
+# Shown when Bonsai can't narrow: fixed kinds, and spelling for anything else.
 KIND_TILES = [
     {"label": "Yes", "kind": "kind", "value": "yes"},
     {"label": "No", "kind": "kind", "value": "no"},
     {"label": "Ask a question", "kind": "kind", "value": "question"},
-    {"label": "Something else", "kind": "kind", "value": "else"},
+    {"label": "Spell it", "kind": "spell"},
 ]
 # After this many narrowing rounds, stop guessing and offer replies that always work.
 MAX_NARROW_ROUNDS = 3
@@ -33,8 +35,10 @@ STUCK_TILES = [
     {"label": "Hold on, let me think.", "kind": "say", "value": "Hold on, let me think."},
     {"label": "Can you ask me as a yes or no?", "kind": "say", "value": "Can you ask me as a yes or no?"},
     {"label": "Never mind.", "kind": "say", "value": "Never mind."},
-    {"label": "Start over", "kind": "home", "value": "back"},
+    {"label": "Spell it", "kind": "spell"},
 ]
+# Spell mode: 4 letter groups on the keyboard row. Each letter is the first letter of a word.
+LETTER_GROUPS = ["abcdef", "ghijkl", "mnopqr", "stuvwxyz"]
 RISKY_WORDS = ("send", "post", "delete", "remove", "submit")
 
 
@@ -43,9 +47,15 @@ def new_narrow():
     return {"path": [], "rejected": [], "seen": [], "rounds": 0}
 
 
+def new_spell():
+    # buf: what he typed. Chunks before a space are spelled-out words; the last chunk is initials.
+    # group: letter group open (None = keyboard row). seq: drops stale predictions.
+    return {"buf": "", "group": None, "preds": [], "loading": False, "seq": 0}
+
+
 class State:
     def __init__(self):
-        self.mode = "listen"   # listen | thinking | choose | speaking | computer
+        self.mode = "listen"   # listen | thinking | choose | speaking | computer | spell
         self.status = "Listening"
         self.tiles: list[dict] = []
         self.index = 0
@@ -62,6 +72,8 @@ class State:
         self.pregen: tuple | None = None   # (history_len, replies, offer_computer)
         self.pregen_task: asyncio.Task | None = None
         self.narrow = new_narrow()   # "More..." narrowing for the current turn
+        self.spell = new_spell()     # kept if he backs out, cleared once he says something
+        self.spell_task: asyncio.Task | None = None
 
     def view(self):
         return {k: getattr(self, k) for k in
@@ -144,6 +156,7 @@ async def say(text, then=None):
     S.mode, S.status, S.tiles = "speaking", "Speaking", []
     S.history.append({"who": "me", "text": text})
     S.last_said = text
+    S.spell = new_spell()
     await broadcast()
     await sidecar.speak(text)
     if then == "computer":   # he just agreed to do something on the Mac: start doing it
@@ -162,6 +175,83 @@ async def pregenerate(n_turns):
     if len(S.history) == n_turns:
         S.pregen = (n_turns, replies, offer)
         S.stats.update(latency_ms=ms, bonsai_ok=ok)
+
+
+# ---------- spell mode (first letter of each word, Bonsai expands it) ----------
+
+def spell_parts(buf):
+    """'thai sg' -> (['thai'], 'sg'): words ended by a space are spelled out, the rest are initials."""
+    chunks = buf.split(" ")
+    return [w for w in chunks[:-1] if w], chunks[-1]
+
+
+def spell_status():
+    words, initials = spell_parts(S.spell["buf"])
+    if not words and not initials:
+        return "Spell it: first letter of each word"
+    return " ".join(words + [c.upper() for c in initials]) + " _"
+
+
+def show_spell_root(focus=None):
+    """Top row: Bonsai's guesses (+ say it as typed). Bottom row: 4 letter groups, Space, Delete."""
+    sp = S.spell
+    sp["group"] = None
+    if sp["loading"]:
+        top = [{"label": "...", "kind": "pending", "row": 0} for _ in range(3)]
+    else:
+        top = [{"label": r, "kind": "say", "value": r, "row": 0} for r in sp["preds"]]
+    typed, (words, _) = sp["buf"].strip(), spell_parts(sp["buf"])
+    if words or (typed and not sp["loading"] and not sp["preds"]):   # whole words: let him say them as-is
+        top.append({"label": typed, "kind": "say", "value": typed, "typed": True, "row": 0})
+    keys = [{"label": " ".join(g.upper()), "kind": "group", "value": g, "row": 1} for g in LETTER_GROUPS]
+    keys += [{"label": "Space", "kind": "space", "row": 1}, {"label": "Delete", "kind": "del", "row": 1}]
+    tiles = top + keys
+    set_tiles(tiles, mode="spell", status=spell_status())
+    S.index = next((i for i, t in enumerate(tiles) if focus and (t["kind"], t.get("value")) == focus),
+                   len(top) + 2)   # default: M-R, so every letter group is at most 2 tilts away
+
+
+async def spell_predict():
+    """Ask Bonsai what the letters mean. Runs in the background so typing never waits."""
+    sp = S.spell
+    sp["seq"] += 1
+    seq = sp["seq"]
+    words, initials = spell_parts(sp["buf"])
+    replies, ms, ok = await brain.expand_initials(S.history, words, initials)
+    if sp is not S.spell or seq != sp["seq"]:
+        return   # he typed more since: a newer prediction is on the way
+    sp["preds"], sp["loading"] = replies, False
+    S.stats.update(latency_ms=ms, bonsai_ok=ok)
+    if S.mode == "spell" and sp["group"] is None:
+        # the guess row changes size: keep the highlight on the same key, or in the guess row
+        cur, idx = (S.tiles[S.index] if S.tiles else {}), S.index
+        show_spell_root(focus=(cur.get("kind"), cur.get("value")) if cur.get("row") == 1 else None)
+        new_top = sum(1 for t in S.tiles if t.get("row") == 0)
+        if cur.get("row") == 0 and new_top:
+            S.index = min(idx, new_top - 1)
+        if not ok:
+            S.status = spell_status() + "   (Bonsai offline: spell whole words, then pick them)"
+        await broadcast()
+
+
+def spell_changed(focus=None):
+    """Buffer changed: show the keyboard row now, fetch new guesses in the background."""
+    sp = S.spell
+    if S.spell_task and not S.spell_task.done():
+        S.spell_task.cancel()
+    sp["preds"], sp["loading"] = [], bool(sp["buf"].strip())
+    if sp["loading"]:
+        S.spell_task = asyncio.create_task(spell_predict())
+    else:
+        sp["seq"] += 1
+    show_spell_root(focus)
+
+
+def show_letters(group):
+    S.spell["group"] = group
+    tiles = [{"label": c.upper(), "kind": "letter", "value": c} for c in group]
+    tiles.append({"label": "Back", "kind": "back"})
+    set_tiles(tiles, mode="spell", status=spell_status())
 
 
 # ---------- computer mode ----------
@@ -246,8 +336,16 @@ async def handle(gesture):
         S.index = (S.index - 1) % n
     elif gesture == "right":
         S.index = (S.index + 1) % n
+    elif gesture == "nod" and S.mode == "spell" and not S.spell["group"]:
+        # shortcut: nod jumps to the first guess (then smile says it); nod again goes back to the keys
+        top = sum(1 for t in S.tiles if t.get("row") == 0)
+        if top:
+            S.index = 0 if S.index >= top else top + 2
     elif gesture == "cancel":
-        go_listen()
+        if S.mode == "spell" and S.spell["group"]:
+            show_spell_root(focus=("group", S.spell["group"]))   # close the letter group
+        else:
+            go_listen()   # spelling is kept: "Spell" again picks up where he left off
     elif gesture == "select":
         await pick(S.tiles[S.index])
 
@@ -298,6 +396,25 @@ async def pick(tile):
             await show_actions()
     elif k == "done":
         go_listen()
+    # spell mode
+    elif k == "spell":
+        spell_changed()
+    elif k == "group":
+        show_letters(tile["value"])
+    elif k == "back":
+        show_spell_root(focus=("group", S.spell["group"]))
+    elif k == "letter":
+        S.spell["buf"] += tile["value"]
+        spell_changed()
+    elif k == "space":
+        if S.spell["buf"].strip() and not S.spell["buf"].endswith(" "):
+            S.spell["buf"] += " "
+            spell_changed(focus=("space", None))
+    elif k == "del":
+        if S.spell["buf"]:
+            S.spell["buf"] = S.spell["buf"][:-1]
+            spell_changed(focus=("del", None))
+    # "pending" (guess still loading): nothing to do
 
 
 async def on_gesture(gesture):

@@ -100,12 +100,13 @@ Holding a tilt keeps moving the highlight, one tile every 0.9 s.
 
 ```
 LISTEN --nod--> THINKING --> CHOOSE --select reply--> SPEAKING --> LISTEN
-LISTEN --cancel--> HOME (Talk | Use computer | Repeat last)
+LISTEN --cancel--> HOME (Talk | Use computer | Spell | Repeat last)
 CHOOSE "More..." --> NARROW: Bonsai asks a short question + 3 options that fit the
                      conversation + "Something else" --> pick one --> 3 replies that do that
                      ("More..." again narrows deeper; "Something else" = 3 new options)
-NARROW after 3 rounds --> safe tiles ("Hold on, let me think." | "Can you ask me as a yes or no?" | "Never mind." | Start over)
-NARROW if Bonsai fails --> fixed KIND tiles (Yes | No | Ask a question | Something else)
+NARROW after 3 rounds --> safe tiles ("Hold on, let me think." | "Can you ask me as a yes or no?" | "Never mind." | Spell it)
+NARROW if Bonsai fails --> fixed KIND tiles (Yes | No | Ask a question | Spell it)
+SPELL (from "Spell it", or the home menu "Spell") --> see "Spell mode" below
 COMPUTER: /screen -> Bonsai picks 3 next steps + "Done" -> select -> /act -> /screen -> repeat
           a step that sends/posts/deletes -> Yes/No first ("No" is highlighted) -> /act -> LISTEN
           /act fails -> "That didn't work. Try another?" + new steps
@@ -121,6 +122,19 @@ How a computer step is chosen (`prompts/actions.txt`, `prompts/message.txt`):
 - When the best step is typing a message, the 3 tiles are 3 wordings of that message.
 - "Send" is not offered while every text field is empty.
 - Tile text comes from the real element ("press · Andrew", "type · “come back”"), so a tile says exactly what will happen.
+
+## Spell mode (last-resort keyboard)
+
+Context-aware abbreviation expansion, after SpeakFaster (Cai et al., NAACL 2022; Nature Communications 2024).
+
+- Each letter is the **first letter of a word**: `iwtgh` -> "I want to go home".
+- **Space** ends a word he spelled out in full: `thai sg` -> "Thai sounds good". Spelled words come first, then initials.
+- Bonsai expands the letters using the conversation and profile (`prompts/spell.txt`). The JSON schema carries a regex built from the letters, so every guess fits them.
+- Guesses load in the background after each letter, and typing never waits for them.
+- Layout: top row = up to 3 guesses + "say as typed" (once a word is spelled out). Bottom row = `A-F` `G-L` `M-R` `S-Z` `Space` `Delete`. Picking a group shows its letters + Back.
+- After each letter the highlight lands on `M-R`, so any group is at most 2 tilts away. **Nod** jumps to the first guess (smile then says it); nod again goes back to the keys.
+- Cancel (open mouth) inside a letter group goes back to the keyboard row. From the keyboard row it goes to LISTEN, and the letters are kept until he says something.
+- Bonsai down: no guesses. He spells whole words and picks "say as typed".
 
 ## Rules
 

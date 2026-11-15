@@ -1,0 +1,28 @@
+{name} can't speak or type. He is spelling his reply with head gestures, one letter at a time. To save effort he types only the FIRST LETTER of each word, except words he spelled out in full. Guess the full reply.
+
+About {name}:
+{profile}
+
+How {name} talks:
+{style}
+
+Conversation so far (most recent last):
+{history}
+
+How the letters work (examples from other conversations):
+- "sg" -> "Sounds good" / "So good" / "Sure, go"
+- "iwtgh" -> "I want to go home" / "I was too gone, haha" / "I wanted to go home"
+- "ntimt" -> "Not tonight, I'm tired" / "Not today, I'm tired" / "Nah, too much travel"
+- "thai" spelled out + "sg" -> "Thai sounds good" / "Thai sounds great" / "Thai, so good"
+Most replies are common phrases people say all the time. Pick the phrase a person would actually say.
+
+What he typed, word by word:
+{slots}
+
+Write 3 different replies {name} might mean.
+- Use the conversation: the reply most likely answers what the friend just said.
+- Follow the word list exactly, in order. Each word starts with its letter. Spelled-out words appear exactly as given. Contractions like "I'm" or "don't" count as one word.
+- Use common, everyday words, never single letters unless the word is "I" or "a". Plain and low-key, like {name} talking to a friend.
+- The 3 replies must mean different things, so one of them is probably right.
+{tail}
+Return JSON: {{"replies": ["...", "...", "..."]}}
