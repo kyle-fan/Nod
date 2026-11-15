@@ -18,10 +18,19 @@ app = FastAPI()
 HOME_TILES = [
     {"label": "Talk", "kind": "home", "value": "talk"},
     {"label": "Quick phrases", "kind": "home", "value": "phrases"},
-    {"label": "Use computer", "kind": "home", "value": "computer"},
-    {"label": "Repeat last", "kind": "home", "value": "repeat"},
+    {"label": "Text someone", "kind": "home", "value": "text"},
+    {"label": "More", "kind": "home", "value": "more"},
     {"label": "Back", "kind": "home", "value": "back"},
 ]
+HOME_MORE_TILES = [
+    {"label": "Use computer", "kind": "home", "value": "computer"},
+    {"label": "Repeat last", "kind": "home", "value": "repeat"},
+    {"label": "Stop listening", "kind": "home", "value": "pause"},
+    {"label": "Back", "kind": "home", "value": "back"},
+]
+# Tiles left on screen with no gesture for this long are put away (he looked away, or the
+# moment passed). 0 = never.
+TILES_TIMEOUT_S = float(__import__("os").getenv("TILES_TIMEOUT_S", "90"))
 # Things he may need to say with no wait and no Bonsai (works even if the model is down).
 # Override with "phrases" in hub/profile.json. Shown 3 at a time.
 DEFAULT_PHRASES = ["Yes", "No", "Thank you", "I need help", "Give me a minute",
@@ -72,6 +81,9 @@ class State:
         self.incoming: dict | None = None  # {"from", "text", "at"}: a text that came in, not yet answered
         self.texts_seen: list[str] = []    # answers to that text already offered
         self.sending: dict | None = None   # {"to", "text"} of the message waiting for Yes
+        self.paused = False                # "Stop listening": what is heard is thrown away
+        self.text_to = ""                  # who "Text someone" is writing to
+        self.last_input = time.time()      # last gesture, for putting stale tiles away
         self.done: list[str] = []          # computer steps taken this session
         self.pregen: tuple | None = None   # (history_len, replies, offer_computer, bonsai_ok)
         self.pregen_task: asyncio.Task | None = None
@@ -80,7 +92,7 @@ class State:
     def view(self):
         v = {k: getattr(self, k) for k in
              ("mode", "status", "tiles", "index", "history", "partial",
-              "last_gesture", "gesture_n", "stats", "in_computer", "camera")}
+              "last_gesture", "gesture_n", "stats", "in_computer", "camera", "paused")}
         inc = self.incoming
         v["incoming"] = {"from": inc["from"], "text": inc["text"]} if inc else None
         # what the computer task is and how far it has got, for the progress line on screen
@@ -108,7 +120,9 @@ def set_tiles(tiles, mode="choose", status="Choose"):
 
 def go_listen(status="Listening"):
     S.mode, S.status, S.tiles, S.index, S.in_computer, S.pending = "listen", status, [], 0, False, None
-    if status == "Listening" and text_waiting():
+    if status == "Listening" and S.paused:
+        S.status = "Not listening. Nod to listen again"
+    elif status == "Listening" and text_waiting():
         S.status = f'{S.incoming["from"]} texted you. Nod to answer'
 
 
@@ -214,6 +228,30 @@ def show_phrases(page=0):
     set_tiles(tiles, status="Quick phrases")
 
 
+# ---------- texting someone unprompted ----------
+
+def show_people():
+    """Who to text: the people in his profile (up to 3), then the full step-by-step route."""
+    people = list(brain.load_profile().get("people", {}))[:3]
+    tiles = [{"label": p, "kind": "person", "value": p} for p in people]
+    tiles.append({"label": "Someone else", "kind": "home", "value": "computer"})
+    tiles.append({"label": "Back", "kind": "home", "value": "back"})
+    set_tiles(tiles, status="Text who?")
+
+
+async def show_new_texts():
+    who = S.text_to
+    S.mode, S.status, S.tiles = "thinking", f"Writing to {who}...", []
+    await broadcast()
+    texts, ms, ok = await brain.suggest_new_texts(S.history, who, S.texts_seen)
+    S.stats.update(latency_ms=ms, bonsai_ok=ok)
+    S.texts_seen += texts
+    tiles = [{"label": t, "kind": "newtext", "value": t} for t in texts]
+    tiles.append({"label": "Other messages", "kind": "newtextmore"})
+    tiles.append({"label": "Back", "kind": "home", "value": "back"})
+    set_tiles(tiles, status=f"Text {who}")
+
+
 # ---------- answering a text that came in ----------
 
 async def show_text_replies():
@@ -239,7 +277,8 @@ async def send_text(who, text):
     expected, hand over to the normal step-by-step tiles instead of guessing."""
     start_task()
     S.in_computer = True
-    S.goal = {"goal": f"reply to {who}'s text", "app": "Messages"}
+    replying = bool(S.incoming and S.incoming["from"].lower() == who.lower())
+    S.goal = {"goal": f"reply to {who}'s text" if replying else f"text {who}", "app": "Messages"}
 
     def find(pred):
         return next((e for e in S.screen.get("elements", []) if pred(e)), None)
@@ -326,6 +365,11 @@ async def show_actions(note=""):
         go_listen(status="Can't reach the Mac helper")
         return
     S.stats.update(latency_ms=ms, bonsai_ok=ok)
+    if S.screen.get("error") and not S.screen.get("elements"):
+        # e.g. the sidecar has no Accessibility permission: say so instead of showing nothing
+        print(f'[screen] {S.screen["error"]}')
+        go_listen(status="Can't see the screen: allow Accessibility for the terminal")
+        return
     if info.get("goal"):
         S.goal = {"goal": info["goal"], "app": info["app"]}
     tiles = [{"label": a["label"], "kind": "redraft" if a.get("draft") else "action", "value": a}
@@ -445,11 +489,15 @@ async def run_action(action, finish=False):
 async def handle(gesture):
     S.last_gesture = gesture
     S.gesture_n += 1
+    S.last_input = time.time()
     if S.mode in ("thinking", "speaking"):
         return   # ignore input while busy
 
     if S.mode == "listen":
-        if gesture == "nod":
+        if gesture == "nod" and S.paused:
+            S.paused = False
+            go_listen()
+        elif gesture == "nod":
             if text_waiting():
                 await show_text_replies()
             else:
@@ -493,6 +541,13 @@ async def pick(tile):
             await show_replies()
         elif v == "phrases":
             show_phrases()
+        elif v == "more":
+            set_tiles(HOME_MORE_TILES, status="More")
+        elif v == "pause":
+            S.paused, S.partial = True, ""
+            go_listen()
+        elif v == "text":
+            show_people()
         elif v == "computer":
             start_task()
             await show_actions()
@@ -509,6 +564,13 @@ async def pick(tile):
             await run_action(action)
     elif k == "phrases":
         show_phrases(tile["value"])
+    elif k == "person":
+        S.text_to, S.texts_seen = tile["value"], []
+        await show_new_texts()
+    elif k == "newtext":
+        await send_text(S.text_to, tile["value"])
+    elif k == "newtextmore":
+        await show_new_texts()
     elif k == "textreply":
         await send_text(S.incoming["from"], tile["value"])
     elif k == "textmore":
@@ -552,6 +614,8 @@ class Heard(BaseModel):
 async def heard(h: Heard):
     """Sidecar posts what the friend said."""
     text = h.text.strip()
+    if S.paused:          # "Stop listening": nothing that is said is kept or shown
+        return {"ok": True, "paused": True}
     if not h.final:
         S.partial = text
     elif text:
@@ -615,7 +679,7 @@ async def ws_endpoint(ws: WebSocket):
                 await recalibrate()
             elif msg.get("type") == "reset":
                 S.history.clear()
-                S.incoming, S.pregen = None, None
+                S.incoming, S.pregen, S.paused = None, None, False
                 sidecar.FAKE.reset()
                 go_listen()
                 await broadcast()
@@ -626,6 +690,19 @@ async def ws_endpoint(ws: WebSocket):
 @app.get("/")
 async def index():
     return FileResponse(config.UI_DIR / "index.html")
+
+
+async def put_stale_tiles_away():
+    """Tiles nobody touched for a while go away, so an accidental gesture later can't pick one."""
+    while True:
+        await asyncio.sleep(2)
+        if (TILES_TIMEOUT_S and S.mode in ("choose", "computer") and not lock.locked()
+                and time.time() - S.last_input > TILES_TIMEOUT_S):
+            async with lock:
+                if S.pending:
+                    S.pending = S.sending = None
+                go_listen()
+            await broadcast()
 
 
 async def watch_camera():
@@ -640,6 +717,7 @@ async def watch_camera():
 
 @app.on_event("startup")
 async def startup():
+    asyncio.create_task(put_stale_tiles_away())
     if config.USE_CAMERA:
         from .face import GestureDetector
         loop = asyncio.get_running_loop()

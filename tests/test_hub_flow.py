@@ -31,6 +31,9 @@ async def fake_chat(prompt, max_tokens=220, schema=None, slot=None):
         return json.dumps({"replies": ["yeah one sec", "what time", "nah"]})
     if slot == "intent":
         return json.dumps({"question": "In or out?", "options": ["Say yes", "Say no", "Ask when"]})
+    if slot == "textreply" and "You're texting" in user:
+        assert "You're texting Andrew (roommate and best friend)" in user, user
+        return json.dumps({"replies": ["you around", "want food", "what's the plan tonight"]})
     if slot == "textreply":
         assert 'just texted you: "where are you"' in user, user
         n = len(re.findall(r"already passed on", user))
@@ -83,7 +86,7 @@ async def fresh(app="Messages"):
     config.MOCK_APP = app
     sidecar.FAKE.reset()
     S.history.clear()
-    S.pregen, S.incoming, S.texts_seen = None, None, []
+    S.pregen, S.incoming, S.texts_seen, S.paused = None, None, [], False
     main.go_listen()
     SPOKEN.clear()
     CALLS.clear()
@@ -256,11 +259,70 @@ async def test_picked_replies_are_remembered_and_shown_to_bonsai():
     assert len(brain.load_learned()) == 1
 
 
+async def test_text_someone_from_the_menu():
+    await fresh(app="Safari")
+    await g("cancel", "right", "right", "select")            # Menu -> Text someone
+    assert S.status == "Text who?" and labels() == ["Andrew", "Someone else", "Back"], labels()
+    await g("select")
+    assert S.status == "Text Andrew" and labels()[:3] == ["you around", "want food", "what's the plan tonight"]
+    await g("right", "select")
+    assert S.status == 'Send "want food" to Andrew?', S.status
+    assert S.view()["task"]["goal"] == "text Andrew"
+    await g("left", "select")
+    assert sidecar.FAKE.sent == [("Andrew", "want food")] and S.status == "Sent"
+
+
+async def test_stop_listening_drops_what_is_said():
+    await fresh()
+    await g("cancel", "right", "right", "right", "select")   # Menu -> More
+    assert labels() == ["Use computer", "Repeat last", "Stop listening", "Back"]
+    await g("right", "right", "select")
+    assert S.paused and S.status == "Not listening. Nod to listen again"
+    await friend("this is private")
+    await main.heard(main.Heard(text="half a sentence", final=False))
+    assert S.history == [] and S.partial == ""
+    await g("nod")
+    assert not S.paused and S.status == "Listening" and S.mode == "listen"
+    await friend("want to grab food")
+    assert len(S.history) == 1
+
+
+async def test_tiles_left_alone_are_put_away():
+    await fresh()
+    await friend("want to grab food")
+    await g("nod")
+    assert S.mode == "choose"
+    old = main.TILES_TIMEOUT_S
+    main.TILES_TIMEOUT_S = 0.05
+    S.last_input -= 1
+    task = asyncio.create_task(main.put_stale_tiles_away())
+    try:
+        await asyncio.sleep(2.3)
+        assert S.mode == "listen" and S.tiles == []
+    finally:
+        task.cancel()
+        main.TILES_TIMEOUT_S = old
+
+
+async def test_screen_that_cannot_be_read_says_why():
+    await fresh()
+
+    async def blind():
+        return {"app": "", "elements": [], "error": "Accessibility permission missing."}
+    old, sidecar.screen = sidecar.screen, blind
+    try:
+        await friend("can you tell Andrew to come back")
+        await g("nod", "select")
+        assert S.mode == "listen" and "Accessibility" in S.status, S.status
+    finally:
+        sidecar.screen = old
+
+
 async def test_quick_phrases_need_no_model():
     await fresh()
     CALLS.clear()
     await g("cancel")
-    assert labels() == ["Talk", "Quick phrases", "Use computer", "Repeat last", "Back"]
+    assert labels() == ["Talk", "Quick phrases", "Text someone", "More", "Back"]
     await g("right", "select")
     assert S.status == "Quick phrases" and labels()[:3] == ["Yes", "No", "Thank you"]
     await g("right", "right", "right", "select")        # More phrases

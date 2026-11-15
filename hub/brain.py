@@ -253,6 +253,30 @@ async def suggest_text_replies(history: list[dict], who: str, text: str,
     return (replies + ["yeah", "not right now", "give me a minute"])[:3], ms, ok
 
 
+async def suggest_new_texts(history: list[dict], who: str,
+                            avoid: list[str] | None = None) -> tuple[list[str], int, bool]:
+    """3 messages he might want to send to someone, unprompted. Returns (messages, ms, ok)."""
+    p = load_profile()
+    relation = p.get("people", {}).get(who, "")
+    prompt = _prompt("textstart.txt", name=p["name"], profile=_profile_text(p), style=_style_text(p),
+                     history=_history_text(history[-6:], p["name"]), who=who,
+                     relation=f" ({relation})" if relation else "",
+                     avoid=("You already passed on these, so write different ones: "
+                            + "; ".join(avoid) + "\n") if avoid else "")
+    t0 = time.perf_counter()
+    try:
+        out = await _chat(prompt, max_tokens=120, schema=REPLY_SCHEMA, slot="textreply")
+        low = {a.lower() for a in avoid or []}
+        texts = [r for r in dict.fromkeys(str(x).strip() for x in _parse_json(out, "replies"))
+                 if r and r.lower() not in low]
+        ok = bool(texts)
+    except Exception as e:
+        print(f"[brain] Bonsai error: {e}")
+        texts, ok = [], False
+    ms = int((time.perf_counter() - t0) * 1000)
+    return (texts + ["hey, you around", "what are you up to", "call me when you can"])[:3], ms, ok
+
+
 async def suggest_intents(history: list[dict], path: list[str], rejected: list[str],
                           seen: list[str]) -> tuple[str, list[str], int, bool]:
     """Clarifying question + 3 directions for the reply. Returns (question, options, ms, ok).

@@ -287,6 +287,7 @@ function render(s) {
   else if (cam.on && cam.calibrating) al.push(["info", "Learning your neutral face: sit still for a moment"]);
   else if (cam.on && !cam.face) al.push(["", "Can't see your face: check the camera and lighting"]);
   if (!s.stats.bonsai_ok) al.push(["", "Bonsai is offline: showing basic replies"]);
+  if (s.paused) al.push(["info", "Not listening: nothing said is being kept"]);
   if (s.stats.sidecar_ok === false) al.push(["bad", "Voice helper is not answering"]);
   $("alerts").innerHTML = al.map(([c, t]) => `<span class="alert ${c}">${esc(t)}</span>`).join("");
 
@@ -326,13 +327,15 @@ function render(s) {
       ? '<div class="tile glass skel"></div>'.repeat(4)
       : s.tiles.map(t => {
           const firstDone = t.kind === "done" && s.tiles[0] === t && s.tiles.length > 1;
-          const meta = ["more", "else", "done", "home", "kind", "phrases", "redraft", "textmore", "textskip"].includes(t.kind) && !firstDone ? " meta" : "";
+          const meta = ["more", "else", "done", "home", "kind", "phrases", "redraft", "textmore", "textskip", "newtextmore"].includes(t.kind) && !firstDone ? " meta" : "";
           const yes = (t.kind === "confirm" && t.value ? " yes" : "") + (firstDone ? " first-done" : "");
           const len = t.label.length > 60 ? " xlong" : t.label.length > 34 ? " long" : "";
           // computer steps say exactly what will happen: press this, type that, open that
           const a = t.kind === "action" ? t.value : null;
           const cap = t.kind === "redraft" ? '<span class="cap">rewrite</span>'
             : t.kind === "textreply" ? '<span class="cap">text back</span>'
+            : t.kind === "newtext" ? '<span class="cap">text</span>'
+            : t.kind === "person" ? '<span class="cap">text</span>'
             : t.kind === "confirm" && t.value ? '<span class="cap">this sends it</span>'
             : a ? `<span class="cap">${{press: "press", type: "type", open_app: "open"}[a.type] || ""}</span>` : "";
           const text = a && a.type === "type" ? `“${esc(a.text)}”` : a && a.type === "open_app" ? esc(a.name) : esc(t.label);
