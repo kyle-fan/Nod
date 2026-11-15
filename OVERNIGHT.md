@@ -10,20 +10,27 @@ git diff main overnight --stat  # what changed
 
 No sound was played and no text message was sent. One side effect on your Mac: a test run asked the sidecar to open Messages, so Messages may be open in the background.
 
-## Try it in two minutes
+## Try it: ten minutes, in this order
+
+Run these from Terminal (it has the permissions).
 
 ```bash
 cd ~/Nod && git checkout overnight
-./test.sh                                             # fast checks, a few seconds
-NOD_OVERLAY=1 USE_CAMERA=1 ./start.sh                 # from Terminal, as before
-./doctor.sh                                           # says what is missing, in plain words
+./test.sh                                   # 1. fast checks: should end "ALL TESTS PASSED"
+NOD_OVERLAY=1 USE_CAMERA=1 ./start.sh       # 2. sit neutral while it starts
+./doctor.sh                                 # 3. everything should say OK
 ```
 
-Then, with Messages open:
+| Step | What to do | What should happen | If it doesn't |
+|---|---|---|---|
+| 4. Gestures | Open http://127.0.0.1:8000/debug in Chrome. Nod, tilt each way, smile, open your mouth. | Each bar passes its red line and "enough" lights up; the log below shows nod, left, right, select, cancel. | Tell me which gesture and what the "last 4 s" numbers say. `NOD_GESTURES=classic ./start.sh` brings back last night's rules. |
+| 5. Talking | Say something, nod, tilt, smile. | Caption in the overlay, three replies appear one by one, the Mac speaks, and its own voice does not come back as a caption. | `curl -s localhost:8790/ears` shows whether sound is arriving. |
+| 6. Texting | Messages open. Say "can you tell Caden Ruan to come back". Nod, then smile on the first tile each time; at the question, tilt to Yes and smile. | Tiles go: agree, Caden Ruan, three wordings, Send, `Send "..." to Caden Ruan?`. The text appears in Messages. | Tell me which tile was wrong; `/debug` has the log. |
+| 7. A text arrives | In the Chrome tab's dev box type `/text Caden Ruan: where are you`, then nod. | "Caden Ruan texted you. Nod to answer", three answers, one pick types it, Yes sends. | Same. |
+| 8. The menu | Open your mouth. Try Quick phrases and Text someone. | Phrases speak at once. | |
+| 9. The game | Open http://127.0.0.1:8000/demo in Safari. Say "can you put the Yankees game on". | Open Safari, the Yankees link, Play, then "That looks done". | This one has never run on a real browser. If the tiles are wrong, send me `curl -s "localhost:8790/screen?app=Safari"`. |
 
-1. Say "can you tell Caden Ruan to come back", nod, smile on the first tile each time. On the practice Mac the whole chain takes about 9 seconds.
-2. Open your mouth for the menu. Try **Quick phrases** and **Text someone**.
-3. In the Chrome tab's dev box type `/text Andrew: where are you` and nod. (To have real incoming texts trigger this, start with `NOD_WATCH_MESSAGES=1`.)
+To go back to last night's version at any point: `./stop.sh && git checkout main && ./start.sh`.
 
 ## What is new
 
