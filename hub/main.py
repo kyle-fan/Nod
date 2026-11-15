@@ -101,6 +101,7 @@ class State:
               "last_gesture", "gesture_n", "stats", "in_computer", "camera", "paused")}
         inc = self.incoming
         v["incoming"] = {"from": inc["from"], "text": inc["text"]} if inc else None
+        v["settings"] = {"express": config.EXPRESS, "learn": config.LEARN}
         # what the computer task is and how far it has got, for the progress line on screen
         v["task"] = {"goal": (self.goal or {}).get("goal", ""), "done": self.done[-4:]} if self.in_computer else None
         return v
@@ -792,6 +793,8 @@ async def ws_endpoint(ws: WebSocket):
                 asyncio.create_task(on_gesture(msg["name"]))
             elif msg.get("type") == "heard":   # dev box: type what the friend said
                 await heard(Heard(text=msg.get("text", ""), final=True))
+            elif msg.get("type") == "settings":
+                await set_settings({k: msg[k] for k in ("express", "learn") if k in msg})
             elif msg.get("type") == "pick":
                 asyncio.create_task(on_pick(int(msg.get("index", -1))))
             elif msg.get("type") == "incoming":   # dev box: "/text Andrew: where are you"
@@ -806,6 +809,26 @@ async def ws_endpoint(ws: WebSocket):
                 await broadcast()
     except WebSocketDisconnect:
         clients.discard(ws)
+
+
+def settings_view():
+    return {"express": config.EXPRESS, "learn": config.LEARN}
+
+
+@app.get("/settings")
+async def get_settings():
+    return settings_view()
+
+
+@app.post("/settings")
+async def set_settings(body: dict):
+    """Switch options while running (the dev bar's checkboxes): {"express": true, "learn": false}."""
+    if "express" in body:
+        config.EXPRESS = bool(body["express"])
+    if "learn" in body:
+        config.LEARN = bool(body["learn"])
+    await broadcast()
+    return settings_view()
 
 
 @app.get("/status")

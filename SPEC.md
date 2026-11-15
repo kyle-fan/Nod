@@ -174,6 +174,8 @@ How a computer step is chosen (`prompts/actions.txt`, `prompts/message.txt`):
 
 Prompt files (`prompts/*.txt`) have two parts split by a line of `=====`. Above it is what never changes between calls (who he is, the rules): it is sent as the system message and llama-server keeps it cached. Below it is what changed (conversation, screen). Keep anything that varies below the line.
 
+`GET /settings` and `POST /settings {"express": true, "learn": false}` on the hub switch those two options while it runs (the dev bar has checkboxes for them). `GET /status` reports whether Bonsai, the sidecar and the camera are alive.
+
 The page takes `?overlay=1` (floating version) and `?scale=1.3` (everything bigger).
 
 State sent to the UI over `/ws` now also has: `camera` (`on`, `face`, `calibrating`, `error`), `task` (`goal`, `done`) during computer mode, `incoming` (`from`, `text`), `paused`, and `stats.sidecar_ok`. History entries can be `{"who": "text", "from": ...}` and `{"who": "me_text", "to": ...}` as well as `friend` and `me`.

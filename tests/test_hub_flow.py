@@ -478,6 +478,18 @@ async def test_express_texting_is_three_picks():
         config.EXPRESS = False
 
 
+async def test_settings_can_be_switched_while_running():
+    await fresh()
+    try:
+        assert (await main.set_settings({"express": True, "learn": False})) == {"express": True, "learn": False}
+        assert S.view()["settings"] == {"express": True, "learn": False}
+        await friend("can you tell Andrew to come back")
+        await g("nod", "select")
+        assert S.status == "Text Andrew"
+    finally:
+        await main.set_settings({"express": False, "learn": True})
+
+
 async def test_quick_phrases_need_no_model():
     await fresh()
     CALLS.clear()

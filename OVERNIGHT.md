@@ -68,6 +68,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 - **Reword a typed message**: "Write a different message" gives three more.
 - If the friend keeps talking after you nod and you haven't moved yet, the replies are rewritten for what they just said.
 - Number keys `1`-`5` and mouse clicks pick tiles, for a helper or for rehearsing.
+- The dev bar in the Chrome tab has two checkboxes, **Express texts** and **Learn replies**, so you can switch them without restarting.
 
 ### Screen
 
