@@ -13,7 +13,7 @@ git diff main overnight --stat  # what changed
 
 No sound was played and no text message was sent. One side effect on your Mac: a test run asked the sidecar to open Messages, so Messages may be open in the background.
 
-**Changed Sunday morning at your request:** on the camera, opening your mouth now means "my turn" and a nod means back or menu. Where the steps below say nod, open your mouth, and the other way round. `NOD_SWAP=0 ./start.sh` or the **Mouth = my turn** checkbox in the dev bar puts it back.
+**Changed Sunday morning at your request:** on the camera, opening your mouth now means "my turn" and a nod means back or menu. Where the steps below say nod, open your mouth, and the other way round. `NOD_SWAP=0 ./start.sh` or the **Swap turn/back** checkbox in the dev bar puts it back. The screen keeps the normal wording ("Nod when it's your turn").
 
 ## Try it: ten minutes, in this order
 

@@ -209,14 +209,14 @@
     <div id="chip"></div>
   </div>
   <div id="tiles"></div>
-  <p class="hint" id="hint">open mouth = my turn · tilt = move (hold to keep moving) · smile = pick · nod = back</p>
+  <p class="hint" id="hint">nod = my turn · tilt = move (hold to keep moving) · smile = pick · open mouth = back</p>
 </div>
 
 <footer id="dev">
   <input id="say" placeholder="Dev: type what the friend said, press Enter. Or: /text Andrew: where are you   (keys: N nod · 1-5 pick a tile · ← → move · Space pick · Esc back · C recalibrate camera · D hide this bar)">
   <label class="opt" title="Texting someone in the profile takes 3 picks instead of 5"><input type="checkbox" id="optExpress"> Express texts</label>
   <label class="opt" title="Remember the replies he picks and use them as examples of his voice"><input type="checkbox" id="optLearn"> Learn replies</label>
-  <label class="opt" title="On: open mouth = my turn, nod = back. Off: nod = my turn, open mouth = back"><input type="checkbox" id="optSwap"> Mouth = my turn</label>
+  <label class="opt" title="Camera only. On: the two face movements for 'my turn' and 'back' are swapped. The screen wording does not change"><input type="checkbox" id="optSwap"> Swap turn/back</label>
   <label class="opt" title="Last night's gesture rules, if the new ones misfire on your face. Sit neutral for two seconds after switching"><input type="checkbox" id="optClassic"> Classic gestures</label>
   <a class="opt" href="/debug" target="_blank" title="Live gesture readings, microphone level, timings and a log">Under the hood</a>
   <button id="reset">Reset</button>
@@ -252,9 +252,9 @@ const STAR = [
 })();
 
 let ws, lastTiles = "", lastConvo = "", lastGestureN = null, lastCaption = "", captionTimer = null;
-const GESTURE_LABEL = {nod: "my turn", left: "← tilt", right: "tilt →", select: "smile ✓", cancel: "back"};
+const GESTURE_LABEL = {nod: "nod", left: "← tilt", right: "tilt →", select: "smile ✓", cancel: "back"};
 const SUB = {listen: "Nod when it's your turn", computer: "Pick the next step"};
-let swapped = true, shownSwap = null;   // open mouth = my turn, nod = back (the hub says which)
+let swapped = false, shownSwap = null;   // on-screen wording: always the normal one (nod = my turn)
 
 const welcome = () => `<div id="welcome">
   <h2>Talk and use your Mac with your face</h2>
@@ -296,7 +296,7 @@ function render(s) {
   }
 
   if (s.settings) { $("optExpress").checked = s.settings.express; $("optLearn").checked = s.settings.learn; $("optClassic").checked = !!s.settings.classic_gestures;
-    swapped = !!s.settings.swap_nod_mouth; $("optSwap").checked = swapped;
+    $("optSwap").checked = !!s.settings.swap_nod_mouth;   // only the camera changes; the wording on screen stays the normal Nod interface
     if (swapped !== shownSwap) {
       shownSwap = swapped; lastConvo = "";   // redraw the welcome card with the right gestures
       $("hint").textContent = swapped ? "open mouth = my turn · tilt = move (hold to keep moving) · smile = pick · nod = back"

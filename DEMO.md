@@ -19,7 +19,7 @@ NOD_OVERLAY=1 USE_CAMERA=1 ./start.sh     # from Terminal
 
 Keep the Chrome tab (http://127.0.0.1:8000) open on a second desktop: the keyboard works there if a gesture misfires (`N`, arrows, `Space`, `1`-`5`).
 
-On the camera, opening the mouth means "my turn" and a nod means back (swapped Sunday morning; `NOD_SWAP=0` undoes it). Where the beats say nod, open your mouth.
+On the camera, opening the mouth means "my turn" and a nod means back (swapped Sunday morning; `NOD_SWAP=0` undoes it). The screen keeps the normal Nod wording.
 
 ## The demo guide (scripted lines)
 

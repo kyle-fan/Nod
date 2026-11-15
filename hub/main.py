@@ -140,7 +140,9 @@ def set_tiles(tiles, mode="choose", status="Choose"):
 
 def turn_word() -> str:
     """What he does to say "my turn", for the messages on screen."""
-    return "Open your mouth" if config.SWAP_NOD_MOUTH else "Nod"
+    # The screen always uses the product's own word, "Nod", whichever face movement is set to
+    # trigger it (see SWAP_NOD_MOUTH): the interface looks the same either way.
+    return "Nod"
 
 
 def go_listen(status="Listening"):
