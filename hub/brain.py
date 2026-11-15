@@ -63,8 +63,9 @@ def _learned_text() -> str:
     if not picks:
         return ""
     lines = "\n".join(f'- to "{p["friend"]}" he chose: {p["reply"]}' for p in picks)
-    return ("Replies he really picked lately (this is his actual voice: match it, "
-            "but don't reuse a line unless it truly fits):\n" + lines + "\n\n")
+    return ("How he has really been talking lately (replies he picked to other lines). Use this only "
+            "for his word choice and tone. Every option you write must answer the friend's newest "
+            "line below; never paste one of these:\n" + lines + "\n\n")
 
 
 def _history_text(history: list[dict], name: str) -> str:

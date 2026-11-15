@@ -80,7 +80,9 @@ class State:
     def view(self):
         v = {k: getattr(self, k) for k in
              ("mode", "status", "tiles", "index", "history", "partial",
-              "last_gesture", "gesture_n", "stats", "in_computer", "camera", "incoming")}
+              "last_gesture", "gesture_n", "stats", "in_computer", "camera")}
+        inc = self.incoming
+        v["incoming"] = {"from": inc["from"], "text": inc["text"]} if inc else None
         # what the computer task is and how far it has got, for the progress line on screen
         v["task"] = {"goal": (self.goal or {}).get("goal", ""), "done": self.done[-4:]} if self.in_computer else None
         return v
@@ -218,7 +220,11 @@ async def show_text_replies():
     inc = S.incoming
     S.mode, S.status, S.tiles = "thinking", f'Answering {inc["from"]}...', []
     await broadcast()
-    replies, ms, ok = await brain.suggest_text_replies(S.history, inc["from"], inc["text"], S.texts_seen)
+    ready, inc["ready"] = inc.get("ready"), None
+    if ready and not S.texts_seen:        # written while the text was sitting there
+        replies, ms, ok = await ready
+    else:
+        replies, ms, ok = await brain.suggest_text_replies(S.history, inc["from"], inc["text"], S.texts_seen)
     S.stats.update(latency_ms=ms, bonsai_ok=ok)
     S.texts_seen += replies
     tiles = [{"label": r, "kind": "textreply", "value": r} for r in replies]
@@ -571,6 +577,8 @@ async def incoming(body: dict):
         return {"ok": True, "duplicate": True}
     S.incoming = {"from": who, "text": text, "at": time.time()}
     S.texts_seen = []
+    # start writing answers now, so they are ready by the time he nods
+    S.incoming["ready"] = asyncio.create_task(brain.suggest_text_replies(list(S.history), who, text))
     S.history.append({"who": "text", "from": who, "text": text})
     if config.MOCK_SIDECAR:
         sidecar.FAKE.received[who] = text
