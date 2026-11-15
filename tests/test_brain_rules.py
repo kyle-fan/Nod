@@ -63,6 +63,9 @@ def test_messages_are_written_to_the_person_not_about_them():
     assert f("he wants pizza") == "you want pizza"
     assert f("tell him the food is here") == "tell you the food is here"   # such drafts are dropped anyway
     assert f("bring her charger") == "bring your charger"
+    assert f("calling her later") == "calling you later"
+    assert f("when's he getting back") == "when are you getting back"
+    assert f("where's she at") == "where are you at"
     assert f("waiting for him") == "waiting for you"
     assert f("game's starting, come back") == "game's starting, come back"
     assert f("do you want pizza") == "do you want pizza"

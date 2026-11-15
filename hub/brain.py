@@ -669,6 +669,7 @@ def _second_person(text: str) -> str:
     "i'll call you tonight". Bonsai mostly gets this right; this fixes the times it doesn't."""
     t = text
     subs = [
+        (r"\b(when|where|what|how|why|who)'s (he|she)\b", lambda m: m.group(1) + " are you"),
         (r"\b(is|was) (he|she)\b", lambda m: ("are" if m.group(1).lower() == "is" else "were") + " you"),
         (r"\b(does|did|has|can|will|would|could|should) (he|she)\b", lambda m: {"does": "do", "has": "have"}.get(m.group(1).lower(), m.group(1)) + " you"),
         (r"\b(he|she)'s\b", "you're"), (r"\b(he|she) is\b", "you are"), (r"\b(he|she) was\b", "you were"),
@@ -677,6 +678,7 @@ def _second_person(text: str) -> str:
         (r"\b(he|she) (\w{3,})s\b", lambda m: "you " + m.group(2)),          # he wants -> you want
         (r"\b(he|she)\b", "you"),
         (rf"\b({'|'.join(_OBJECT_VERBS)}) (him|her)\b(?! \w+ing\b)", lambda m: m.group(1) + " you"),
+        (r"\bher\b(?=\s*(?:$|[,.?!]|(?:later|tonight|tomorrow|today|now|soon|back|again|too|then|when|if|that|about|to|at|in|on|for|a|the|up)\b))", "you"),
         (r"\bhim\b", "you"), (r"\bhers\b", "yours"),
         (r"\b(his|her)\b", "your"),
     ]
