@@ -317,6 +317,9 @@ final class Ears: @unchecked Sendable {
         }
         text = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        // Whisper sometimes loops on one sound ("fiiiiii..."): collapse long runs, cap the length.
+        text = text.replacingOccurrences(of: "(.)\\1{4,}", with: "$1", options: .regularExpression)
+        if text.count > 240 { text = String(text.prefix(240)) }
         let bare = normalize(text)
         let junk: Set<String> = ["", "you", "thank you", "thanks for watching", "thank you for watching",
                                  "bye", "so", "uh", "um", "hmm", "mm"]
