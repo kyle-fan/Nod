@@ -50,7 +50,7 @@ async def fake_answer(prompt, schema, slot):
         assert "You're texting Andrew (roommate and best friend)" in user, user
         return json.dumps({"replies": ["you around", "want food", "what's the plan tonight"]})
     if slot == "textreply":
-        assert 'just texted you: "where are you"' in user, user
+        assert 'just texted you: "where are you' in user, user
         n = len(re.findall(r"already passed on", user))
         return json.dumps({"replies": ["in my room", "why", "be there soon"] if not n
                            else ["at the dorm", "who's asking", "one minute"]})
@@ -546,6 +546,84 @@ async def test_a_smile_right_as_tiles_appear_does_not_pick():
     S.tiles_at -= 1                                          # a moment later it is a real choice
     await main.on_gesture("select", source="camera")
     assert SPOKEN == ["yeah one sec"]
+
+
+class RealShapedMac(sidecar.FakeMac):
+    """What the Swift sidecar actually returns for Messages on macOS 26 (seen on the demo Mac):
+    the chat list is names only, with no search box or compose button, and an open chat is
+    Back, the message box (whose label mentions an unanswered text) and Send."""
+    NAMES = ["Alan", "Sammy", "Harker Twins", "Tiffany Sun", "Caden Ruan", "Kairui Sun", "Andrew", "Mom"]
+
+    def screen(self):
+        if self.app != "Messages":
+            return {"app": self.app, "elements": [{"id": 1, "role": "textfield", "label": "Address and search bar", "value": ""},
+                                                  {"id": 2, "role": "button", "label": "Reload"}]}
+        if self.chat:
+            asked = self.received.get(self.chat)
+            box = f"Message {self.chat}" + (f": your answer to {self.chat}, who asked you '{asked}'" if asked else "")
+            return {"app": "Messages", "elements": [
+                {"id": 1, "role": "button", "label": "Back to conversations"},
+                {"id": 2, "role": "textfield", "label": box, "value": self.draft},
+                {"id": 3, "role": "button", "label": "Send"}]}
+        return {"app": "Messages", "elements": [{"id": i + 1, "role": "button", "label": n} for i, n in enumerate(self.NAMES)]}
+
+    def act(self, action):
+        if action.get("type") == "press" and self.app == "Messages" and not self.chat:
+            el = next((e for e in self.screen()["elements"] if e["id"] == action.get("id")), None)
+            if not el:
+                return {"ok": False, "error": "unknown id"}
+            self.chat = el["label"]
+            return {"ok": True}
+        return super().act(action)
+
+
+async def with_real_shapes(app="Messages"):
+    await fresh(app)
+    mac = RealShapedMac()
+    mac.app = app
+    sidecar.FAKE = mac
+    return mac
+
+
+async def test_texting_chain_on_the_real_macs_shapes():
+    old = sidecar.FAKE
+    try:
+        mac = await with_real_shapes()
+        mac.received["Andrew"] = "what's for dinner"            # an old unanswered text in that chat
+        await friend("the game's about to start, can you tell Andrew to come back")
+        await g("nod", "select")
+        assert labels() == ["Andrew", "Done"], labels()        # nobody else is offered
+        await g("select")
+        assert labels()[:3] == ["come back", "you coming", "game's starting"], labels()
+        await g("select")
+        assert labels()[0] == "Send", labels()
+        await g("select")
+        assert S.status == 'Send "come back" to Andrew?', S.status
+        await g("left", "select")
+        assert mac.sent == [("Andrew", "come back")] and S.status == "Sent"
+    finally:
+        sidecar.FAKE = old
+
+
+async def test_answering_a_text_on_the_real_macs_shapes():
+    old = sidecar.FAKE
+    try:
+        mac = await with_real_shapes(app="Safari")
+        mac.chat = None
+        await main.incoming({"from": "Andrew", "text": "where are you"})
+        mac.received["Andrew"] = "where are you"
+        await g("nod", "select")
+        assert S.status == 'Send "in my room" to Andrew?', S.status
+        await g("left", "select")
+        assert mac.sent == [("Andrew", "in my room")]
+        # and when another chat is open, it goes back to the list first
+        mac.chat, mac.draft = "Mom", ""
+        await main.incoming({"from": "Andrew", "text": "where are you now"})
+        await g("nod", "select")
+        assert S.status.startswith('Send "') and S.status.endswith('to Andrew?'), S.status
+        assert mac.chat == "Andrew"
+    finally:
+        sidecar.FAKE = old
 
 
 async def test_quick_phrases_need_no_model():
