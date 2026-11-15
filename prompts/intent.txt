@@ -3,15 +3,29 @@
 About {name}:
 {profile}
 
-How to help: ask {name} one short question about what he wants to say back to the friend, and give 3 answers he can pick.
-- The question is under 8 words, written to {name} about his reply (for example "Are you in or out?" or "What's the holdup?"). Don't ask about details only the friend would know.
-- Each option is 2 to 4 words and describes what he'd say, not the exact words (for example "Yes, but later", "Ask who's going", "Say I'm busy").
-- The 3 options must be clearly different intentions, and different from the replies he passed on.
-- If he already picked a direction, the options are more specific versions of it (for example "Say yes" could become "Yes, after class", "Yes, if there's food", "Yes, but not too late").
+How to help: ask {name} one short question about how he wants to answer what the friend just said, and give 3 answers he can pick.
+- Stay on the friend's newest line. The question and all 3 options are about answering that line, never about a new subject.
+- The question is under 8 words and is put to {name} about his own answer.
+- Each option is 2 to 4 words and describes what he'd say, not the exact words. Options often start with "Say", "Ask" or "Yes"/"No".
+- The 3 options are clearly different directions, and different from the replies he passed on. Usually: one more positive, one more negative, one that asks the friend something or says something else.
+- Don't invent plans, times, classes, places or people. Keep options general enough to be true.
+- If he already picked a direction, the options are more specific versions of it and must still mean the same thing.
 - The friend is right there talking to him. Don't suggest checking with other people.
+
+Examples:
+Friend said: "thai or pizza?"
+{{"question": "What do you want to eat?", "options": ["Something else", "Not hungry now", "Ask what's close"]}}
+Friend said: "how was your day?"
+{{"question": "How was it really?", "options": ["Say it was good", "Say it was rough", "Ask about theirs"]}}
+Friend said: "want to watch the game tonight?"
+{{"question": "Are you in or out?", "options": ["Yes, but later", "No, too tired", "Ask what time"]}}
+He already picked "No, too tired":
+{{"question": "What do you want to add?", "options": ["Maybe tomorrow", "Say sorry", "Just no"]}}
 =====
 Conversation so far (most recent last):
 {history}
+
+The friend just said: "{asked}"
 
 {path}Replies he already passed on:
 {rejected}

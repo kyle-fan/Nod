@@ -127,7 +127,7 @@ def test_prompt_files_split_into_fixed_and_changing_parts():
                      ("message.txt", dict(app="Messages", field="Message Andrew", goal="g", avoid="")),
                      ("textreply.txt", dict(who="Andrew", text="hi", avoid="")),
                      ("textstart.txt", dict(who="Andrew", relation="", avoid="")),
-                     ("intent.txt", dict(path="", rejected="", seen="")),
+                     ("intent.txt", dict(path="", rejected="", seen="", asked="")),
                      ("task.txt", {}),
                      ("actions.txt", dict(habits="", goal_line="", done="", app="Messages", elements="", json_shape="{}"))]:
         fixed, changing = brain._prompt(name, name=p["name"], profile="PROFILE", style="STYLE",

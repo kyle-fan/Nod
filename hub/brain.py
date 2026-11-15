@@ -514,6 +514,7 @@ async def suggest_intents(history: list[dict], path: list[str], rejected: list[s
     ) if path else ""
     prompt = _prompt("intent.txt", name=p["name"], profile=_profile_text(p),
                      history=_history_text(history, p["name"]), path=path_text,
+                     asked=friend_said(history).replace('"', "'") or "(nothing yet)",
                      rejected="\n".join(f"- {r}" for r in rejected) or "(none)",
                      seen="; ".join(seen) or "(none)")
     t0 = time.perf_counter()
@@ -522,7 +523,8 @@ async def suggest_intents(history: list[dict], path: list[str], rejected: list[s
         question = str(data.get("question", "")).strip()
         seen_l = {s.lower() for s in seen}
         options = [o.strip() for o in map(str, data.get("options", []))
-                   if o.strip() and o.strip().lower() not in seen_l]
+                   if o.strip() and o.strip().lower() not in seen_l
+                   and o.strip().lower() not in ("something else", "other", "none of these")]   # the page adds that tile itself
         ok = True
     except Exception as e:
         print(f"[brain] Bonsai error: {e}")
