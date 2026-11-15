@@ -323,7 +323,13 @@ final class Hands: @unchecked Sendable {
             out.append(["id": 1, "role": "button", "label": "Back to conversations"])
             map[2] = field
             roleMap[2] = "textfield"
-            out.append(["id": 2, "role": "textfield", "label": "Message \(chatName ?? "")".trimmingCharacters(in: .whitespaces),
+            // If the other person wrote last, say so in the box's label: the hub passes this label
+            // to Bonsai when it drafts the message, so the draft can answer what they asked.
+            var boxLabel = "Message \(chatName ?? "")".trimmingCharacters(in: .whitespaces)
+            if let incoming = lastReceivedText(in: win), !incoming.lowercased().contains("search") {
+                boxLabel += ": your answer to \(chatName ?? "them"), who asked you '\(incoming)'"
+            }
+            out.append(["id": 2, "role": "textfield", "label": boxLabel,
                         "value": (attr(field, kAXValueAttribute) as? String) ?? ""])
             sendMap[3] = field
             out.append(["id": 3, "role": "button", "label": "Send"])
@@ -346,6 +352,24 @@ final class Hands: @unchecked Sendable {
         }
         lock.withLock { elements = map; roles = roleMap; sendFieldID = sendMap; clickIDs = clicks; backID = back }
         return ["app": "Messages", "elements": out]
+    }
+
+    /// The newest bubble in the open chat, if the other person sent it (so it is unanswered).
+    /// Bubbles are groups described "Your iMessage, <text>, <time>" or "<Sender>, <text>, <time>".
+    private func lastReceivedText(in win: AXUIElement) -> String? {
+        var budget = 1200
+        guard let transcript = find(identifier: "TranscriptCollectionView", in: win, budget: &budget) else { return nil }
+        for group in children(transcript).reversed().prefix(12) {
+            var b = 40
+            guard let bubble = find(identifier: "CKBalloonTextView", in: group, budget: &b),
+                  var text = string(bubble, kAXValueAttribute) else { continue }
+            let desc = string(group, kAXDescriptionAttribute) ?? ""
+            if desc.hasPrefix("Your ") { return nil }   // we wrote last: nothing to answer
+            text = text.replacingOccurrences(of: "\"", with: "'")
+            if text.count > 90 { text = String(text.prefix(87)) + "..." }
+            return text
+        }
+        return nil
     }
 
     /// Names of the chats in the Messages sidebar (if Messages is running), for name correction.
