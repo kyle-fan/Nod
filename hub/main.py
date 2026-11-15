@@ -135,6 +135,7 @@ async def broadcast():
 
 def set_tiles(tiles, mode="choose", status="Choose"):
     S.tiles, S.index, S.mode, S.status = tiles, 0, mode, status
+    print(f"[tiles] {status}: " + " | ".join(str(t.get("label")) for t in tiles), flush=True)
     S.tiles_at = time.time()
 
 
@@ -795,6 +796,7 @@ async def heard(h: Heard):
     elif text:
         note("heard", text)
         S.partial = ""
+        print(f"[heard] {text}", flush=True)
         S.history.append({"who": "friend", "text": text, "at": time.time()})
         S.pregen = None
         if S.pregen_task:

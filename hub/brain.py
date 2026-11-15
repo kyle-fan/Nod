@@ -66,14 +66,18 @@ def demo_guide(kind: str, line: str) -> list[str]:
         scenes = json.loads(config.DEMO_PATH.read_text(encoding="utf-8")).get(kind, [])
     except (OSError, ValueError):
         return []
-    low = re.sub(r"\s+", " ", line.lower())
-
-    def has(w: str) -> bool:      # at the start of a word: "eat" is in "eating", not in "seat"
-        return re.search(r"\b" + re.escape(w.strip().lower()), low) is not None
-    for sc in scenes:
-        if (all(has(w) for w in sc.get("all", [])) and (not sc.get("any") or any(has(w) for w in sc["any"]))
-                and not any(has(w) for w in sc.get("none", []))):
-            return [str(x) for x in sc.get("say", [])][:3]
+    # Speech arrives a sentence at a time and side talk gets mixed in, so each sentence is
+    # tried on its own, newest first, before the whole thing.
+    parts = [x.strip() for x in re.split(r"(?<=[.?!])\s+", line) if x.strip()]
+    for low in [x.lower() for x in reversed(parts)] + [re.sub(r"\s+", " ", line.lower())]:
+        def has(w: str) -> bool:      # at the start of a word: "eat" is in "eating", not in "seat"
+            return re.search(r"\b" + re.escape(w.strip().lower()), low) is not None
+        for sc in scenes:
+            if not (sc.get("all") or sc.get("any")) and low != parts[-1].lower():
+                continue                  # a catch-all scene is decided on the newest sentence only
+            if (all(has(w) for w in sc.get("all", [])) and (not sc.get("any") or any(has(w) for w in sc["any"]))
+                    and not any(has(w) for w in sc.get("none", []))):
+                return [str(x) for x in sc.get("say", [])][:3]
     return []
 
 

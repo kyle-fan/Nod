@@ -8,6 +8,9 @@
      "say": ["thai sounds good", "pizza works for me", "whatever's close, I'm starving"]},
     {"name": "lunch?", "any": ["lunch", "hungry", "grab food", "get food", "something to eat", "grab a bite"], "none": ["tell ", "text ", "ask "],
      "say": ["yeah, I'm starving", "sure, where were you thinking", "nah, I'm good for now"]},
+    {"name": "a time is suggested", "any": ["p.m", "pm", "a.m", "o'clock", "noon", "tonight at", "at 7", "at 8", "at 6", "like 7", "like 8", "like 6", "around"],
+     "none": ["tell ", "text ", "ask ", "put "],
+     "say": ["yeah, that works", "can we do a bit later", "sounds good, I'll be here"]},
     {"name": "watch the game?", "any": ["yankees", "the game"], "none": ["tell ", "text ", "ask ", "put ", "turn "],
      "say": ["yeah, I'm in", "what time does it start", "nah, not tonight"]}
   ],
