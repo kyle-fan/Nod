@@ -537,6 +537,17 @@ async def test_first_computer_step_is_ready_before_he_agrees():
     assert S.view()["task"]["goal"] == "put the yankees game on", S.view()["task"]
 
 
+async def test_a_smile_right_as_tiles_appear_does_not_pick():
+    await fresh()
+    await friend("want to grab food")
+    await g("nod")
+    await main.on_gesture("select", source="camera")        # he was already smiling at the friend
+    assert S.mode == "choose" and SPOKEN == []
+    S.tiles_at -= 1                                          # a moment later it is a real choice
+    await main.on_gesture("select", source="camera")
+    assert SPOKEN == ["yeah one sec"]
+
+
 async def test_quick_phrases_need_no_model():
     await fresh()
     CALLS.clear()

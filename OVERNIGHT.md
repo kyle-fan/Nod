@@ -55,6 +55,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 
 - A nod is now a dip and return relative to where your head just was, and "neutral" slowly follows you, so nods keep working after you slump or lean. Under the old rules a slump of about 10 degrees lost them.
 - The dip that comes with a left tilt (20 degrees for you) is no longer read as a nod. Opening your mouth, which also tips the head, isn't either.
+- A smile in the first 0.6 s after new tiles appear is ignored, so smiling at your friend as you nod doesn't pick the first tile.
 - If the new rules feel worse on your face, `NOD_GESTURES=classic ./start.sh` brings back last night's.
 - `python -m hub.face --record trace.json` saves 40 s of your real gestures; `--replay trace.json` shows what the new and the old rules fire on it. If something misfires, record it and send me the file.
 - The screen says "Learning your neutral face", "Can't see your face", or "Camera not available" when that is the problem.

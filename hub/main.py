@@ -32,7 +32,10 @@ HOME_MORE_TILES = [
 ]
 # Tiles left on screen with no gesture for this long are put away (he looked away, or the
 # moment passed). 0 = never.
-TILES_TIMEOUT_S = float(__import__("os").getenv("TILES_TIMEOUT_S", "90"))
+TILES_TIMEOUT_S = float(__import__("os").getenv("TILES_TIMEOUT_S", "180"))
+# A smile seen by the camera this soon after new tiles appear is ignored: it began before he
+# could have read them (he was smiling at the friend, or it is the tail of the last pick).
+SELECT_GUARD_S = float(__import__("os").getenv("SELECT_GUARD_S", "0.6"))
 # Things he may need to say with no wait and no Bonsai (works even if the model is down).
 # Override with "phrases" in hub/profile.json. Shown 3 at a time.
 DEFAULT_PHRASES = ["Yes", "No", "Thank you", "I need help", "Give me a minute",
@@ -711,9 +714,12 @@ async def on_pick(index):
     await broadcast()
 
 
-async def on_gesture(gesture):
+async def on_gesture(gesture, source="keyboard"):
     if lock.locked():
         return   # busy (thinking/speaking): drop the gesture instead of queueing it
+    if (source == "camera" and gesture == "select" and S.mode in ("choose", "computer")
+            and time.time() - S.tiles_at < SELECT_GUARD_S):
+        return   # too soon after the tiles appeared to be a real choice
     async with lock:
         try:
             await handle(gesture)
@@ -914,7 +920,7 @@ async def startup():
         from .face import GestureDetector
         loop = asyncio.get_running_loop()
         app.state.detector = GestureDetector(
-            on_event=lambda g: asyncio.run_coroutine_threadsafe(on_gesture(g), loop),
+            on_event=lambda g: asyncio.run_coroutine_threadsafe(on_gesture(g, source="camera"), loop),
             camera_index=config.CAMERA_INDEX,
         )
         app.state.detector.start()

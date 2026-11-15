@@ -151,7 +151,7 @@ COMPUTER: /screen -> Bonsai picks 3 next steps + "Done" -> select -> /act -> /sc
           /act fails -> "That didn't work. Try another?" + new steps
           task complete -> "That looks done" with Done as the first, highlighted tile
           a typed message can be reworded: "Write a different message" -> 3 more wordings
-Tiles left untouched for 90 s are put away (TILES_TIMEOUT_S).
+Tiles left untouched for 3 minutes are put away (TILES_TIMEOUT_S). A camera smile within 0.6 s of new tiles appearing is ignored (SELECT_GUARD_S).
 A sidecar or Bonsai failure never leaves the hub stuck: it says what failed and returns to LISTEN.
 ```
 
