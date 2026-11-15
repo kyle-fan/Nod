@@ -659,7 +659,10 @@ async def draft_actions(history: list[dict], screen: dict, field_id, goal: str,
     # comes from the friend's actual words in the conversation.
     who = _goal_person(goal)
     label = field["label"]
-    if not goal.lower().startswith(("reply", "answer", "respond")):
+    asked = next((t["text"].lower() for t in reversed(history) if t["who"] == "friend"), "")
+    answering = bool(re.search(r"\b(reply|replying|respond|answer|write back|text (him|her|them) back)\b",
+                               goal.lower() + " | " + asked))
+    if not answering:
         # Passing something on. The box may mention the other person's last text (most chats
         # end with one); that is only relevant when the task is to answer it.
         label = label.split(": your answer to")[0]
