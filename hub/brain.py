@@ -582,12 +582,16 @@ LOOKUP = re.compile(r"\b(look\s*up|search|google|find out|find|check|what'?s|wha
 
 def _search_query(text: str) -> str:
     """What to type into a web search for this request: "can you look up the Yankees score" ->
-    "Yankees score"."""
-    q = re.sub(r"^(hey,?\s+)?((can|could|would|will) you|please)\s+(please\s+)?", "", text.strip(), flags=re.I)
+    "Yankees score", "search up top comedy movies" -> "top comedy movies"."""
+    q = text.strip()
     q = re.sub(r",?\s*(can|could|would|will) you( please)?\s+(check|look( it)? up|find out|search|google)( it| that)?\s*[?.!]*$", "", q, flags=re.I)
-    q = re.sub(r"^(look\s*up|search( the web)?( for)?|google|find out|find|check|pull up|put on|put|show me|show|open|play|watch)\s+", "", q, flags=re.I)
-    q = re.sub(r"\s+(on|for me|please|in safari|on safari|online)$", "", q.strip(" ?.!"), flags=re.I)
-    q = re.sub(r"^(the|a|an)\s+", "", q, flags=re.I)
+    for _ in range(3):      # "hey can you please search up ..." peels off a layer at a time
+        q = re.sub(r"^(hey|ok|okay|so|and|um|uh),?\s+", "", q, flags=re.I)
+        q = re.sub(r"^((can|could|would|will) you|please|i want to|i wanna|let's|lets|let me|help me)\s+", "", q, flags=re.I)
+        q = re.sub(r"^(look|search|pull|bring|find|check|google|show me|show|open|play|watch|put on|put)"
+                   r"(\s+(up|for|out|on|the web for|online for|me))*\s+", "", q, flags=re.I)
+    q = re.sub(r"\s+(on|for me|please|in safari|on safari|online|on google)$", "", q.strip(" ?.!"), flags=re.I)
+    q = re.sub(r"^(the|a|an|some)\s+", "", q, flags=re.I)
     return q.strip()[:60]
 
 
@@ -770,7 +774,9 @@ async def suggest_actions(history: list[dict], screen: dict, done: list[str] | N
             if key not in seen:
                 seen.add(key)
                 acts.append(a)
-        query = _search_query(info["goal"] or said) if need in BROWSERS and not _goal_person(info["goal"]) else ""
+        # his friend's own words make the best search; Bonsai's summary of the goal drops words ("top")
+        asked = said if said and LOOKUP.search(said) else (info["goal"] or said)
+        query = _search_query(asked) if need in BROWSERS and not _goal_person(info["goal"]) else ""
         if query and not any(d.startswith("Searched the web") for d in done):
             # Safari with nothing to press is a dead end, so a web search is always on offer:
             # first when he asked to look something up or nothing on the page matches,
