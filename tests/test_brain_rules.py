@@ -100,6 +100,19 @@ def test_a_request_split_by_a_pause_is_read_as_one():
     assert brain.friend_said(h[:2] + [{"who": "friend", "text": "bye"}]) == "bye"
 
 
+def test_example_lines_are_only_allowed_in_their_own_conversation():
+    p = {"examples": [{"friend": "I think I failed my midterm", "replies": ["want to get food about it", "that sucks, which class"]},
+                      {"friend": "want to grab food", "replies": ["yeah I could eat"]}]}
+    sad = brain._misplaced_examples(p, said("my grandma's in the hospital"))
+    assert "want to get food about it" in sad and "yeah i could eat" in sad
+    assert brain._pasted("want to grab food about it", sad)            # a near copy counts too
+    assert not brain._pasted("how is she doing", sad)
+    same = brain._misplaced_examples(p, said("I think I failed my midterm"))
+    assert "want to get food about it" not in same                     # there it is his answer
+    food = brain._misplaced_examples(p, said("want to grab food later?"))
+    assert "yeah i could eat" not in food and "that sucks, which class" in food
+
+
 def test_finished_rules():
     assert brain._looks_finished("put the yankees game on", ['Pressed "Yankees vs Red Sox"', 'Pressed "Play"'])
     assert not brain._looks_finished("put the yankees game on", ['Pressed "Yankees vs Red Sox"'])

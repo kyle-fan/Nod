@@ -215,8 +215,8 @@ def finished_strings(text: str) -> list[str]:
     return [x for x in out if x]
 
 
-def _stream_to(on_partial):
-    """Wrap a tiles callback so it fires once per newly finished reply."""
+def _stream_to(on_partial, drop: set[str] | None = None):
+    """Wrap a tiles callback so it fires once per newly finished reply (minus any in `drop`)."""
     if on_partial is None:
         return None
     seen = 0
@@ -226,8 +226,39 @@ def _stream_to(on_partial):
         done = finished_strings(text)
         if len(done) > seen:
             seen = len(done)
-            await on_partial(done[:3])
+            shown = [d for d in done if not (drop and _pasted(d, drop))][:3]
+            if shown:
+                await on_partial(shown)
     return on_text
+
+
+_FILLER = {"want", "what", "that", "this", "with", "your", "have", "about", "think", "when", "where", "there",
+           "they", "them", "then", "just", "like", "going", "really", "could", "would", "should", "know"}
+
+
+def _content(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z']+", text.lower()) if len(w) > 3 and w not in _FILLER}
+
+
+def _pasted(reply: str, examples: set[str]) -> bool:
+    """Is this reply one of those example lines, word for word or nearly?"""
+    low = reply.lower()
+    if low in examples:
+        return True
+    from difflib import SequenceMatcher
+    return any(SequenceMatcher(None, low, ex).ratio() >= 0.8 for ex in examples)
+
+
+def _misplaced_examples(p: dict, history: list[dict]) -> set[str]:
+    """The profile's example replies belong to other conversations. Bonsai likes to paste them
+    in anyway ("want to get food about it" when someone's grandmother is in hospital). An
+    example line is only allowed when the friend is talking about the same thing it answered."""
+    said = _content(friend_said(history))
+    out: set[str] = set()
+    for ex in p.get("examples", []):
+        if not (_content(ex.get("friend", "")) & said):
+            out |= {str(r).lower() for r in ex.get("replies", [])}
+    return out
 
 
 def _parse_json(text: str, key: str) -> list:
@@ -305,9 +336,26 @@ async def suggest_replies(history: list[dict], kind: str | None = None,
                      history=_history_text(history, p["name"]), kind_instruction=instr,
                      learned=_learned_text())
     t0 = time.perf_counter()
+    pasted = _misplaced_examples(p, history)
     try:
-        out = await _chat(prompt, schema=REPLY_SCHEMA, slot="reply", on_text=_stream_to(on_partial))
+        out = await _chat(prompt, schema=REPLY_SCHEMA, slot="reply", on_text=_stream_to(on_partial, pasted))
         replies = [str(r).strip() for r in _parse_json(out, "replies") if str(r).strip()]
+        kept = [r for r in replies if not _pasted(r, pasted)]
+        if 0 < len(replies) and len(kept) < 3:
+            # some options were example lines from another conversation: ask for replacements
+            more_instr = (instr + "\n" if instr else "") + (
+                "- You already gave some options. These 3 must be new and about what the friend just "
+                "said: one agrees or accepts, one doesn't, one asks something back.")
+            again = _prompt("reply.txt", name=p["name"], profile=_profile_text(p), style=_style_text(p),
+                            examples=_examples_text(p), history=_history_text(history, p["name"]),
+                            kind_instruction=more_instr, learned=_learned_text())
+            extra = [str(r).strip() for r in _parse_json(await _chat(again, schema=REPLY_SCHEMA, slot="reply"), "replies")]
+            have = {r.lower() for r in kept}
+            for r in extra:
+                if r and not _pasted(r, pasted) and r.lower() not in have and len(kept) < 3:
+                    kept.append(r)
+                    have.add(r.lower())
+            replies = kept + [r for r in replies if _pasted(r, pasted)]   # a pasted line only as a last resort
         if asking:       # an instruction read back ("ask who's going") is not a question to the friend
             replies = [r for r in replies if not r.lower().startswith("ask ")] or replies
         if not replies:  # malformed JSON: salvage the quoted strings, never raw lines
