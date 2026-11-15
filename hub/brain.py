@@ -899,7 +899,15 @@ def _second_person(text: str) -> str:
 
 async def _draft_messages(p: dict, history: list[dict], app: str, field: str, goal: str,
                           avoid: list[str] | None = None) -> list[str]:
-    guide = demo_guide("pass_on", friend_said(history)) if not avoid and "your answer to" not in field else []
+    guide = []
+    if not avoid and "your answer to" not in field:
+        # The request may be several lines back by now (people keep talking while he picks), so
+        # the newest friend line that actually asks for a text decides, not just the last thing said.
+        said = [t["text"] for t in reversed(history) if t["who"] == "friend"][:8]
+        for line in [x for x in said if MESSAGING.search(x)] + [friend_said(history)]:
+            guide = demo_guide("pass_on", line)
+            if guide:
+                break
     prompt = _prompt("message.txt", name=p["name"], profile=_profile_text(p), style=_style_text(p),
                      examples="\n".join(
                          f'Friend said: "{t["friend"]}"\nYou texted {t["to"]}: ' + " / ".join(t["texts"])
