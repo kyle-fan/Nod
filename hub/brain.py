@@ -519,7 +519,7 @@ async def suggest_searches(history: list[dict]) -> tuple[list[str], int, bool]:
     except Exception as e:
         print(f"[brain] Bonsai error: {e}")
         ok = False
-    said = _search_query(friend_said(history)) if history else ""
+    said = _lookup_text(friend_said(history), "") if history else ""
     for q in ([said] if LOOKUP.search(friend_said(history) or "") else []) + ["Yankees score", "weather today", "news today"]:
         if len(queries) >= 3:
             break
@@ -586,13 +586,29 @@ def _search_query(text: str) -> str:
     q = text.strip()
     q = re.sub(r",?\s*(can|could|would|will) you( please)?\s+(check|look( it)? up|find out|search|google)( it| that)?\s*[?.!]*$", "", q, flags=re.I)
     for _ in range(3):      # "hey can you please search up ..." peels off a layer at a time
-        q = re.sub(r"^(hey|ok|okay|so|and|um|uh),?\s+", "", q, flags=re.I)
+        q = re.sub(r"^(hey|yo|ok|okay|so|and|um|uh|well|alright|wait),?\s+", "", q, flags=re.I)
         q = re.sub(r"^((can|could|would|will) you|please|i want to|i wanna|let's|lets|let me|help me)\s+", "", q, flags=re.I)
         q = re.sub(r"^(look|search|pull|bring|find|check|google|show me|show|open|play|watch|put on|put)"
                    r"(\s+(up|for|out|on|the web for|online for|me))*\s+", "", q, flags=re.I)
     q = re.sub(r"\s+(on|for me|please|in safari|on safari|online|on google)$", "", q.strip(" ?.!"), flags=re.I)
     q = re.sub(r"^(the|a|an|some)\s+", "", q, flags=re.I)
     return q.strip()[:60]
+
+
+def _lookup_text(said: str, goal: str) -> str:
+    """The words to search for. People talk around the request ("Okay cool. Yo, what's the best
+    movie? Let's search it up."), so the newest sentence that asks for a lookup is used; when
+    that one only says "it", the sentence before it is what "it" is."""
+    parts = [x.strip() for x in re.split(r"(?<=[.?!])\s+", said or "") if x.strip()]
+    for i in range(len(parts) - 1, -1, -1):
+        if not (LOOKUP.search(parts[i]) or parts[i].endswith("?")):
+            continue
+        q = _search_query(parts[i])
+        if re.fullmatch(r"(it|that|this|them|one|something)?(\s*up)?", q, flags=re.I) or len(q) < 3:
+            q = _search_query(parts[i - 1]) if i > 0 else ""
+        if len(q) >= 3:
+            return q
+    return _search_query(goal or said)
 
 
 def _this_request(history: list[dict]) -> list[dict]:
@@ -775,8 +791,7 @@ async def suggest_actions(history: list[dict], screen: dict, done: list[str] | N
                 seen.add(key)
                 acts.append(a)
         # his friend's own words make the best search; Bonsai's summary of the goal drops words ("top")
-        asked = said if said and LOOKUP.search(said) else (info["goal"] or said)
-        query = _search_query(asked) if need in BROWSERS and not _goal_person(info["goal"]) else ""
+        query = _lookup_text(said, info["goal"]) if need in BROWSERS and not _goal_person(info["goal"]) else ""
         if query and not any(d.startswith("Searched the web") for d in done):
             # Safari with nothing to press is a dead end, so a web search is always on offer:
             # first when he asked to look something up or nothing on the page matches,
@@ -789,10 +804,9 @@ async def suggest_actions(history: list[dict], screen: dict, done: list[str] | N
             under_way = any(d.startswith("Pressed ") for d in done)      # he is already on his way through a page
             first = not under_way and (bool(LOOKUP.search(said or info["goal"])) or (app in BROWSERS and not on_page))
             acts = [a for a in acts if not (first and a.get("type") == "open_app" and a.get("name") in BROWSERS)]
-            if first:
-                acts.insert(0, search)
-            elif not under_way or not acts:
-                acts.insert(min(1, len(acts)), search)
+            # Until a search has been made the tile is always there: first, or second once he is
+            # already working through a page.
+            acts.insert(0 if first else min(1, len(acts)), search)
         if acts and acts[0].get("draft") and not by_id[acts[0]["id"]].get("value"):
             # An empty box and writing is the next step: show 3 wordings right away.
             acts = await draft_actions(history, screen, acts[0]["id"], info["goal"]) or acts
