@@ -70,7 +70,7 @@ class State:
         self.drafts_seen: list[str] = []   # message wordings already offered or typed
         self.prepared: asyncio.Task | None = None   # first computer step, worked out during speech
         self.done: list[str] = []          # computer steps taken this session
-        self.pregen: tuple | None = None   # (history_len, replies, offer_computer)
+        self.pregen: tuple | None = None   # (history_len, replies, offer_computer, bonsai_ok)
         self.pregen_task: asyncio.Task | None = None
         self.narrow = new_narrow()   # "More..." narrowing for the current turn
 
@@ -118,7 +118,8 @@ async def show_replies(kind=None, path=None):
         await broadcast()
         await asyncio.wait([task])   # doesn't raise if the task was cancelled
     if fresh and S.pregen and S.pregen[0] == len(S.history):
-        replies, ms, ok, offer = S.pregen[1], 0, True, S.pregen[2]   # pre-generated during the pause
+        _, replies, offer, ok = S.pregen   # pre-generated during the pause
+        ms = 0
     else:
         S.mode, S.status, S.tiles = "thinking", "Thinking...", []
         await broadcast()
@@ -178,7 +179,7 @@ async def pregenerate(n_turns):
     offer = await brain.computer_task(S.history)
     replies, ms, ok = await brain.suggest_replies(S.history, offer=offer)
     if len(S.history) == n_turns:
-        S.pregen = (n_turns, replies, offer)
+        S.pregen = (n_turns, replies, offer, ok)
         S.stats.update(latency_ms=ms, bonsai_ok=ok)
 
 
