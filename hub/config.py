@@ -26,3 +26,9 @@ HISTORY_TURNS = int(os.getenv("HISTORY_TURNS", "12"))
 PROFILE_PATH = ROOT / "hub" / "profile.json"
 PROMPTS_DIR = ROOT / "prompts"
 UI_DIR = ROOT / "ui"
+
+# The replies he actually picks are remembered here (on this Mac only) and shown to Bonsai
+# as examples of how he really talks. LEARN=0 turns it off; delete the file to forget.
+LEARNED_PATH = ROOT / "hub" / "learned.json"
+LEARN = os.getenv("LEARN", "1") == "1"
+LEARNED_SHOWN = int(os.getenv("LEARNED_SHOWN", "6"))

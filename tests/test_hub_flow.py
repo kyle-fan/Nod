@@ -71,6 +71,7 @@ SPOKEN = []
 brain._chat = fake_chat
 sidecar.speak = no_wait_speak
 config.PREGEN_PAUSE_S = 0.01
+config.LEARNED_PATH = Path(__import__("tempfile").mkdtemp()) / "learned.json"   # never touch the real one
 S = main.S
 
 
@@ -239,6 +240,20 @@ async def test_text_from_unknown_chat_falls_back_to_steps():
     # there is no chat called Coach on the pretend Mac: it hands over to step-by-step tiles
     assert S.mode == "computer" and S.status == "Pick the next step", (S.mode, S.status)
     assert sidecar.FAKE.sent == []
+
+
+async def test_picked_replies_are_remembered_and_shown_to_bonsai():
+    await fresh()
+    config.LEARNED_PATH.unlink(missing_ok=True)
+    await friend("want to grab food")
+    await g("nod", "right", "select")                   # picks "what time"
+    assert brain.load_learned() == [{"friend": "want to grab food", "reply": "what time"}]
+    assert 'to "want to grab food" he chose: what time' in brain._learned_text()
+    await g("cancel", "right", "select", "select")      # a quick phrase is not learned
+    assert len(brain.load_learned()) == 1
+    await friend("can you tell Andrew to come back")    # agreeing to a task is not learned either
+    await g("nod", "select")
+    assert len(brain.load_learned()) == 1
 
 
 async def test_quick_phrases_need_no_model():

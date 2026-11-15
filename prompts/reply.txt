@@ -17,7 +17,7 @@ Rules for the 3 options:
 - Don't bring up his disability, his hands, or his speech unless the friend does.
 - Don't invent plans, people, places, or facts that aren't above. Stay general instead ("I've got stuff tonight").
 =====
-Conversation so far (most recent last):
+{learned}Conversation so far (most recent last):
 {history}
 
 Write 3 things {name} might say next.

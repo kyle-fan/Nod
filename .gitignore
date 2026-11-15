@@ -8,3 +8,4 @@ hub/models/
 sidecar/.build/
 sidecar/*.xcodeproj/xcuserdata/
 .env
+hub/learned.json

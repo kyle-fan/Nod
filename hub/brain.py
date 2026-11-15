@@ -39,6 +39,34 @@ def _examples_text(p: dict) -> str:
     ) or "(none)"
 
 
+def load_learned() -> list[dict]:
+    try:
+        return json.loads(config.LEARNED_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+
+
+def remember_pick(friend: str, reply: str) -> None:
+    """He chose this reply to that line: keep it, so later suggestions sound more like him."""
+    if not config.LEARN or not friend or not reply:
+        return
+    picks = [p for p in load_learned() if p.get("reply", "").lower() != reply.lower()]
+    picks.append({"friend": friend, "reply": reply})
+    try:
+        config.LEARNED_PATH.write_text(json.dumps(picks[-200:], indent=1, ensure_ascii=False), encoding="utf-8")
+    except OSError as e:
+        print(f"[brain] couldn't save learned replies: {e}")
+
+
+def _learned_text() -> str:
+    picks = load_learned()[-config.LEARNED_SHOWN:] if config.LEARN else []
+    if not picks:
+        return ""
+    lines = "\n".join(f'- to "{p["friend"]}" he chose: {p["reply"]}' for p in picks)
+    return ("Replies he really picked lately (this is his actual voice: match it, "
+            "but don't reuse a line unless it truly fits):\n" + lines + "\n\n")
+
+
 def _history_text(history: list[dict], name: str) -> str:
     if not history:
         return "(nothing yet)"
@@ -184,7 +212,8 @@ async def suggest_replies(history: list[dict], kind: str | None = None,
     wants_question = kind == "question" or (path and path[-1].lower().startswith("ask"))
     prompt = _prompt("reply.txt", name=p["name"], profile=_profile_text(p),
                      style=_style_text(p), examples=_examples_text(p),
-                     history=_history_text(history, p["name"]), kind_instruction=instr)
+                     history=_history_text(history, p["name"]), kind_instruction=instr,
+                     learned=_learned_text())
     t0 = time.perf_counter()
     try:
         out = await _chat(prompt, schema=QUESTION_SCHEMA if wants_question else REPLY_SCHEMA, slot="reply")

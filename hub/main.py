@@ -144,7 +144,8 @@ async def show_replies(kind=None, path=None):
         replies, ms, ok = await brain.suggest_replies(
             S.history, kind=kind, path=path, avoid=None if fresh else S.narrow["rejected"], offer=offer)
     S.stats.update(latency_ms=ms or S.stats["latency_ms"], bonsai_ok=ok)
-    tiles = [{"label": r, "kind": "say", "value": r} for r in replies]
+    # "learn": these came from Bonsai for this conversation, so a pick teaches it his voice
+    tiles = [{"label": r, "kind": "say", "value": r, "learn": ok} for r in replies]
     if offer:   # the friend asked for something doable on the Mac: say it, then go do it
         tiles[0]["then"] = "computer"
     tiles.append({"label": "More...", "kind": "more"})
@@ -466,6 +467,9 @@ async def handle(gesture):
 async def pick(tile):
     k = tile["kind"]
     if k == "say":
+        friend = next((t["text"] for t in reversed(S.history) if t["who"] == "friend"), "")
+        if tile.get("learn") and not tile.get("then") and S.history and S.history[-1]["who"] == "friend":
+            brain.remember_pick(friend, tile["value"])
         await say(tile["value"], then=tile.get("then"))
     elif k == "more":
         S.narrow["rejected"] += [t["label"] for t in S.tiles if t.get("kind") == "say"]
