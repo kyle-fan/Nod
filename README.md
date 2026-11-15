@@ -13,6 +13,7 @@ Theo can't speak clearly or use his hands. With OpenMouth:
 - **A friend talks, Theo answers.** OpenMouth transcribes the friend, Bonsai suggests three replies, Theo tilts his head to choose and smiles to pick, and the Mac says it in his voice. The replies are ready before he nods.
 - **A friend asks him to do something, and he does it.** "Can you tell Andrew to come back?" becomes: agree out loud, open Andrew's chat, pick a wording, confirm, sent. About 9 seconds and five picks (three with `EXPRESS=1`).
 - **A text arrives, and he answers it.** "Andrew texted you. Nod to answer." One pick opens Messages, opens the chat and types the answer; a second confirms it.
+- **He searches the web.** In Safari tasks there is a "Search: ..." tile made from what was asked ("look up the Yankees score"); the results come back as tiles to open. This is the one thing that needs a network.
 - **He starts things himself.** Open mouth for the menu: quick phrases that need no model ("I need help"), text someone, use the computer step by step, repeat the last thing said, or stop listening.
 - **It learns his voice.** The replies he actually picks are kept on the Mac and shown to Bonsai as examples, so suggestions drift toward how he really talks.
 

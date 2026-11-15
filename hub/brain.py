@@ -553,6 +553,7 @@ def _search_query(text: str) -> str:
     """What to type into a web search for this request: "can you look up the Yankees score" ->
     "Yankees score"."""
     q = re.sub(r"^(hey,?\s+)?((can|could|would|will) you|please)\s+(please\s+)?", "", text.strip(), flags=re.I)
+    q = re.sub(r",?\s*(can|could|would|will) you( please)?\s+(check|look( it)? up|find out|search|google)( it| that)?\s*[?.!]*$", "", q, flags=re.I)
     q = re.sub(r"^(look\s*up|search( the web)?( for)?|google|find out|find|check|pull up|put on|put|show me|show|open|play|watch)\s+", "", q, flags=re.I)
     q = re.sub(r"\s+(on|for me|please|in safari|on safari|online)$", "", q.strip(" ?.!"), flags=re.I)
     q = re.sub(r"^(the|a|an)\s+", "", q, flags=re.I)

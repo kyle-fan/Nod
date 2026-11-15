@@ -52,6 +52,9 @@ context  ->  Bonsai predicts options  ->  tiles on screen  ->  head gesture pick
 `POST /speak` `{ "text": "Thai, but no meat for me" }`
 - Speak with TTSKit using the character's voice. Return `{"ok": true}` only after playback finishes (the hub waits on it).
 
+`POST /act {"type": "open_url", "url": "https://www.google.com/search?q=yankees+score"}`
+- Opens an http(s) address in Safari and waits for the page to load. The hub uses it for the "Search: ..." tile in computer mode; the next `/screen` lists the results as links. Needs a network connection, unlike everything else.
+
 `GET /screen`
 - Returns the actionable elements of the frontmost app, from the macOS accessibility tree (AXUIElement).
 ```json
