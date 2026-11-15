@@ -50,9 +50,9 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 
 ### More reliable
 
-- **171 of 171** practice chains ended correctly (right person, right message, or right page), always picking the first tile, with the real model. Before the fixes below it was 16 of 18.
+- **279 of 279** practice chains ended correctly (right person, right message, or right page), always picking the first tile, with the real model. Before the fixes below it was 16 of 18.
 - On chat lists the size of yours (12 and 30 names) and a busy sports page (25 links), the first tile was right in all 21 cases I tried. The sidecar now lists up to 30 chats, so someone further down can be found.
-- About 1,100 random gestures, friend lines and incoming texts thrown at it in six runs: no crash, never stuck, and nothing was sent without a Yes.
+- About 1,200 random gestures, friend lines and incoming texts thrown at it with the real model, and 40,000 more with a stand-in model while Bonsai, the screen reader, the clicker and the voice were made to fail at random: no crash, never stuck, and nothing was sent without a Yes (over 150 texts were sent in those runs, every one after a Yes). A 3,000-action version now runs in `./test.sh`.
 - **Wrong recipient fixed.** "Let mom know I'll call her tonight" used to open Andrew's chat, because the profile calls him the best friend. The person the friend names is now always the recipient, and the confirmation says who it goes to: `Send "i'll call you tonight" to Mom?`
 - **No chat, no guess.** If the person has no chat on screen, the only tile is Done ("Can't see a chat with Coach in Messages"). Last night it opened someone else's chat. And if another person's chat is open, nothing can be typed or sent there: "Back to conversations" comes first.
 - **Never stuck.** A sidecar restart mid-speech (what froze it on "Speaking" last night), a Bonsai failure, or any error now returns to listening with a plain message.
@@ -112,7 +112,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 - `./start.sh` now ends by running the health check, so a missing permission is the first thing you see.
 - `./start.sh` now starts the hub before the sidecar. Last night the hub turning the camera on stopped the microphone that was already running; this order avoids it, and the sidecar restarts the microphone by itself if it ever goes quiet.
 - **http://127.0.0.1:8000/debug**: a live "under the hood" page. It shows what the camera reads for nod, tilt, smile and mouth against each threshold (so you can see how far your nod actually dips), the microphone level against the speech threshold, how long each Bonsai call took, and a log of every gesture, sentence heard and action. Keep it open while tuning.
-- `./test.sh`: about 80 checks in a few seconds, no model or hardware needed.
+- `./test.sh`: 84 checks in a few seconds, no model or hardware needed.
 - `./rehearse.sh` starts the pretend-Mac rehearsal in one command, and `tools/autoplay.py` plays the whole demo by itself on it. `./test.sh --all` also runs the real sidecar on a recording, silently.
 - `NOD_SILENT=1` or `curl -X POST 'localhost:8790/quiet?on=1'`: rehearse without sound.
 

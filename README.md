@@ -127,12 +127,12 @@ What keeps it safe:
 ## Tests
 
 ```bash
-./test.sh        # about 80 checks in a few seconds: no model, camera, microphone or network needed
+./test.sh        # 84 checks in a few seconds: no model, camera, microphone or network needed
 ./test.sh --all  # also runs the real sidecar on a recording, silently (about a minute)
 python tests/run_all.py   # the same fast checks on any OS (Windows too)
 ```
 
-They cover the gesture rules on made-up head traces, the camera thread with fake frames, the whole hub loop against the pretend Mac with a stand-in model (talk, texting, answering a text, confirmations, failures), and the fixed rules around Bonsai's answers.
+They cover the gesture rules on made-up head traces, the camera thread with fake frames, the whole hub loop against the pretend Mac with a stand-in model (talk, texting, answering a text, confirmations, failures), the fixed rules around Bonsai's answers, and 3,000 random actions with failures injected, after each of which nothing may be stuck and nothing may have been sent without a Yes (`python tests/test_random_actions.py 20000 3` for a longer run).
 
 ## Working on it
 
