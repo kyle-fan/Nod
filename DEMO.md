@@ -12,6 +12,7 @@ NOD_OVERLAY=1 USE_CAMERA=1 NOD_WATCH_MESSAGES=1 ./start.sh     # from Terminal
 - Sit neutral while it starts. If gestures drift later: `curl -X POST localhost:8000/recalibrate`.
 - Sound on the MacBook's own microphone and speakers, not headphones. Volume up.
 - Messages open, with a chat for the person you will text near the top. Rename a safe contact to **Andrew** so the line reads well.
+- For the "put the game on" beat: open **http://127.0.0.1:8000/demo** in Safari beforehand. It is a stand-in sports page served from the Mac (a "Yankees vs Red Sox - Watch Live" link, then a player with Play), so this beat works with Wi-Fi off. Real sports sites can't load without a network.
 - Do Not Disturb on. Mac on power.
 - Turn Wi-Fi off last, on camera.
 - Rehearse the texting chain until it is boring. `./test.sh` before you record.
@@ -29,6 +30,8 @@ Keep the Chrome tab (http://127.0.0.1:8000) open on a second desktop: the keyboa
 | 5 | A text arrives from Andrew ("where are you"). Overlay: "Andrew texted you. Nod to answer." Nod, pick, Yes. | "When someone texts him, one nod answers it." | 20 s |
 | 6 | Open mouth: menu. Quick phrases: "I need help". | "And some things shouldn't wait for a model." | 10 s |
 | 7 | Show the Wi-Fi icon still off, and the doctor or the test run. | "Bonsai 2 for prediction, Argmax for hearing and speaking, the Mac's accessibility API for hands. All local." | 10 s |
+
+Optional beat, after 4: friend says "can you put the Yankees game on". Nod, "sure thing", Open Safari, the Yankees link, Play, then Done (it comes up first once the game is playing). Not yet run on the real Mac, so rehearse it before relying on it.
 
 For the 2-minute video, cut beat 3 or 6.
 

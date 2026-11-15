@@ -40,7 +40,7 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 
 ### More reliable
 
-- **72 of 72** practice chains ended correctly (right person, right message, or right page), always picking the first tile, over five runs with the real model. Before the fixes below it was 16 of 18.
+- **99 of 99** practice chains ended correctly (right person, right message, or right page), always picking the first tile, over seven runs with the real model. Before the fixes below it was 16 of 18.
 - On a chat list the size of yours (12 names) and a busy sports page (25 links), the first tile was right in all 16 cases I tried.
 - **Wrong recipient fixed.** "Let mom know I'll call her tonight" used to open Andrew's chat, because the profile calls him the best friend. The person the friend names is now always the recipient, and the confirmation says who it goes to: `Send "i'll call you tonight" to Mom?`
 - **No chat, no guess.** If the person has no chat on screen, the only tile is Done ("Can't see a chat with Coach in Messages"). Last night it opened someone else's chat. And if another person's chat is open, nothing can be typed or sent there: "Back to conversations" comes first.
@@ -73,6 +73,8 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 - Number keys `1`-`5` and mouse clicks pick tiles, for a helper or for rehearsing.
 - The dev bar in the Chrome tab has two checkboxes, **Express texts** and **Learn replies**, so you can switch them without restarting.
 
+- **A game page that works offline.** `http://127.0.0.1:8000/demo` is a stand-in sports site served by the hub: a "Yankees vs Red Sox - Watch Live" link and a player with Play. Open it in Safari before the demo and "put the game on" can be shown with Wi-Fi off, which no real site can.
+
 ### Screen
 
 - Captions in the overlay: "hearing", "heard", "you said", "text from".
@@ -102,7 +104,7 @@ I can't use the camera, grant Accessibility to my own processes, or play sound, 
 1. **The new gesture rules on your face.** They pass 16 tests built from your `--measure` numbers, but that is not you. Try nods after leaning back, and a left tilt. If a gesture is worse than last night, tell me which.
 2. **Messages on the real Mac after the hub changes.** The sidecar's Messages code is unchanged from what worked last night; the hub that drives it is new. The practice Mac passes every time.
 3. **Incoming texts from real Messages** (`NOD_WATCH_MESSAGES=1`). The hub side is tested; how the sidecar spots a new text (an "Unread" row, or a new bubble in the open chat) is from what I saw in your Messages last night and has never run. It is off unless you turn it on.
-4. **Web pages.** `/screen` now lists a page's own links before the browser's toolbar buttons. Never run on a real browser.
+4. **Web pages.** `/screen` now lists a page's own links before the browser's toolbar buttons, and the stand-in game page was built for it. Neither has been read through the real Safari yet, so try "put the Yankees game on" with that page open before relying on it.
 5. **The overlay's position above the Dock**, from last night, and how the new captions look in it.
 6. **Speech hints**: tested on recordings with added noise, not on live voices in a room.
 

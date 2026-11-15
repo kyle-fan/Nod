@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sports Tonight</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- A small stand-in sports site served by the hub, so the "put the game on" part of the
+     demo works with Wi-Fi off. Nothing here is real: no network, no real scores. -->
+<style>
+  body { margin:0; font:17px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; background:#0d1320; color:#eef2f8; }
+  header { background:#16223a; padding:18px 32px; display:flex; align-items:baseline; gap:28px; border-bottom:3px solid #d0342c; }
+  header h1 { margin:0; font-size:26px; letter-spacing:.02em; }
+  header span { color:#9fb0cc; font-size:15px; }
+  main { max-width:1000px; margin:28px auto; padding:0 28px; display:grid; gap:18px; }
+  a.card { display:block; text-decoration:none; color:inherit; background:#18233a; border:1px solid #2b3b5c;
+           border-radius:14px; padding:20px 24px; }
+  a.card:hover, a.card:focus { border-color:#7aa7ff; outline:none; }
+  a.card.live { border-color:#d0342c; background:linear-gradient(120deg, #2a1620, #18233a 60%); }
+  .tag { display:inline-block; font-size:12px; font-weight:700; letter-spacing:.12em; padding:2px 8px; border-radius:6px;
+         background:#d0342c; color:#fff; margin-right:10px; vertical-align:middle; }
+  .big { font-size:26px; font-weight:650; }
+  .sub { color:#9fb0cc; font-size:15px; margin-top:4px; }
+  table { border-collapse:collapse; width:100%; margin-top:10px; }
+  td, th { text-align:left; padding:6px 10px; border-bottom:1px solid #2b3b5c; font-size:15px; }
+  th { color:#9fb0cc; font-weight:500; }
+  #standings { display:none; background:#18233a; border:1px solid #2b3b5c; border-radius:14px; padding:18px 24px; }
+  #standings:target { display:block; }
+  footer { text-align:center; color:#5d6f90; font-size:13px; padding:26px; }
+</style>
+</head>
+<body>
+<header><h1>Sports Tonight</h1><span>Sunday night baseball</span></header>
+<main>
+  <a class="card live" href="/demo/game" aria-label="Yankees vs Red Sox - Watch Live"><span class="tag">LIVE</span><span class="big">Yankees vs Red Sox - Watch Live</span>
+    <div class="sub">First pitch 7:05 PM · Yankee Stadium</div></a>
+  <a class="card" href="#standings" aria-label="MLB Standings"><span class="big">MLB Standings</span><div class="sub">American League East</div></a>
+  <section id="standings" aria-label="Standings">
+    <table><tr><th>Team</th><th>W</th><th>L</th><th>GB</th></tr>
+      <tr><td>Yankees</td><td>94</td><td>68</td><td>-</td></tr><tr><td>Orioles</td><td>91</td><td>71</td><td>3</td></tr>
+      <tr><td>Red Sox</td><td>85</td><td>77</td><td>9</td></tr><tr><td>Blue Jays</td><td>80</td><td>82</td><td>14</td></tr>
+      <tr><td>Rays</td><td>78</td><td>84</td><td>16</td></tr></table>
+  </section>
+</main>
+<footer>Demo page served from this Mac. Scores are made up.</footer>
+</body>
+</html>

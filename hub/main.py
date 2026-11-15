@@ -868,6 +868,17 @@ async def status():
     return out
 
 
+@app.get("/demo")
+async def demo_home():
+    """A stand-in sports page, so "put the game on" can be shown with Wi-Fi off."""
+    return FileResponse(config.UI_DIR / "demo" / "index.html")
+
+
+@app.get("/demo/game")
+async def demo_game():
+    return FileResponse(config.UI_DIR / "demo" / "game.html")
+
+
 @app.get("/")
 async def index():
     return FileResponse(config.UI_DIR / "index.html")
