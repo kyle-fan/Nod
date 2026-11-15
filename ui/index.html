@@ -39,17 +39,29 @@
           padding:4px 10px; margin-left:8px; font-family:var(--mono); }
   .pill.bad { color:var(--warn); border-color:var(--warn); }
 
-  /* ---- transcript: small history, big last line ---- */
-  #convo { display:flex; flex-direction:column; justify-content:flex-end; overflow:hidden; padding:0 4px; min-height:0; }
-  .line { margin:3px 0; font-size:15px; color:var(--faint); }
-  .line::before { font-family:var(--mono); font-size:.8em; margin-right:.6em; opacity:.8; }
+  /* ---- transcript: chat bubbles, friend on the left, him on the right, newest biggest ---- */
+  #convo { display:flex; flex-direction:column; justify-content:flex-end; overflow:hidden; padding:0 4px; min-height:0; gap:8px; }
+  .line { max-width:min(70%, 980px); padding:8px 14px; border-radius:16px 16px 16px 5px; font-size:16px; color:var(--dim);
+          background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); align-self:flex-start; }
+  .line::before { font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+                  display:block; opacity:.75; margin-bottom:1px; }
   .line.friend::before { content:"Friend"; }
+  .line.me { align-self:flex-end; border-radius:16px 16px 5px 16px; background:rgba(255,216,74,.09);
+             border-color:rgba(255,216,74,.22); color:#e9dfbd; }
   .line.me::before { content:"You"; color:var(--star); }
-  .line.latest { font-size:34px; line-height:1.25; color:var(--text); font-weight:600; margin-top:12px; }
-  .line.latest::before { display:block; font-size:13px; letter-spacing:.14em; text-transform:uppercase;
-                         font-weight:400; margin-bottom:2px; }
-  .line.partial { font-size:22px; color:var(--dim); font-style:italic; margin-top:8px; }
-  .line.partial::before { content:"hearing"; font-style:normal; }
+  .line.latest { font-size:32px; line-height:1.25; color:var(--text); font-weight:600; padding:12px 20px; }
+  .line.partial { font-size:22px; color:var(--dim); font-style:italic; border-style:dashed; }
+  .line.partial::before { content:"hearing"; font-style:normal; color:#8fd3ff; }
+
+  /* ---- welcome card: shown until the first words, so anyone can see how it works ---- */
+  #welcome { align-self:center; margin:auto 0; display:grid; grid-template-columns:repeat(4, 1fr); gap:14px;
+             width:min(1100px, 100%); }
+  #welcome h2 { grid-column:1 / -1; margin:0 0 4px; font-size:30px; font-weight:650; }
+  #welcome p.lead { grid-column:1 / -1; margin:0 0 10px; color:var(--dim); font-size:17px; max-width:70ch; }
+  .how { padding:16px 16px 14px; border-radius:18px; }
+  .how .ico { font-size:30px; line-height:1; }
+  .how b { display:block; margin-top:8px; font-size:17px; }
+  .how span { color:var(--dim); font-size:14px; }
 
   /* ---- dock: star + bubble, then tiles ---- */
   #dock { display:grid; gap:14px; }
@@ -88,6 +100,48 @@
   .tile.skel:nth-child(2) { animation-delay:.12s; } .tile.skel:nth-child(3) { animation-delay:.24s; }
   .tile.skel:nth-child(4) { animation-delay:.36s; }
 
+  /* tile text shrinks a little when it is long, so a full sentence still fits */
+  .tile.long { font-size:21px; } .tile.xlong { font-size:18px; }
+  /* sending something for real: the Yes tile looks like what it is */
+  .tile.yes { border-color:rgba(248,113,113,.7); }
+  .tile.yes .cap { color:#fca5a5; }
+  .tile.yes.on { border-color:#f87171; background:rgba(248,113,113,.18);
+                 box-shadow:inset 0 1px 0 rgba(255,255,255,.25), 0 0 0 4px rgba(248,113,113,.2), 0 18px 44px rgba(248,113,113,.25); }
+  .tile.first-done { border-color:rgba(110,231,183,.7); border-style:solid; color:var(--text); }
+  .tile.first-done.on { border-color:#6ee7b7; background:rgba(110,231,183,.16);
+                        box-shadow:inset 0 1px 0 rgba(255,255,255,.25), 0 0 0 4px rgba(110,231,183,.2), 0 18px 44px rgba(110,231,183,.22); }
+
+  /* ---- caption: what was just heard or said (the overlay has no transcript panel) ---- */
+  #caption { display:none; width:fit-content; align-self:flex-start; max-width:min(1100px, 78vw); padding:9px 18px; border-radius:16px;
+             font-size:21px; font-weight:600; opacity:0; transition:opacity .35s; white-space:nowrap; overflow:hidden;
+             text-overflow:ellipsis; }
+  #caption.show { opacity:1; }
+  #caption b { font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase; margin-right:10px;
+               font-weight:700; vertical-align:middle; }
+  #caption.hearing b { color:#8fd3ff; } #caption.heard b { color:#7dffb0; } #caption.said b { color:var(--star); }
+  #caption.hearing { font-style:italic; font-weight:500; }
+
+  /* ---- alerts: only shown when something needs attention ---- */
+  #alerts { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  #alerts:empty { display:none; }
+  .alert { font-family:var(--mono); font-size:13px; padding:5px 12px; border-radius:999px; color:#1a1400;
+           background:var(--warn); font-weight:700; }
+  .alert.info { background:#8fd3ff; }
+  .alert.bad { background:#f87171; color:#210404; }
+
+  /* ---- task line: what the computer task is and how far it got ---- */
+  #task { display:none; gap:8px; align-items:center; flex-wrap:wrap; font-size:15px; color:var(--dim); }
+  #task.show { display:flex; }
+  #task .goal { color:var(--text); font-weight:600; font-size:17px; }
+  #task .step { font-family:var(--mono); font-size:12px; padding:3px 9px; border-radius:999px;
+                border:1px solid var(--glass-edge); color:var(--dim); max-width:260px; overflow:hidden;
+                text-overflow:ellipsis; white-space:nowrap; }
+  #task .step::before { content:"✓ "; color:#6ee7b7; }
+
+  /* the star leans in while someone is talking */
+  .hearing #star { animation:listen .9s ease-in-out infinite; }
+  @keyframes listen { 50% { transform:rotate(-7deg) scale(1.06); } }
+
   .hint { text-align:center; color:var(--faint); font-size:13px; margin:0; font-family:var(--mono); }
 
   footer { display:flex; gap:10px; align-items:center; }
@@ -101,6 +155,9 @@
   html.overlay, .overlay body { background:transparent; }
   .overlay body { grid-template-rows:1fr auto; padding:0 28px 22px; }
   .overlay header, .overlay #convo, .overlay footer, .overlay .hint { display:none; }
+  .overlay #caption { display:block; background:rgba(15,18,26,.9); border:1px solid rgba(255,255,255,.22);
+                      box-shadow:0 6px 22px rgba(0,0,0,.5); }
+  .overlay #task { background:rgba(15,18,26,.82); border-radius:14px; padding:6px 12px; width:fit-content; }
   .overlay #dock { grid-row:2; }
   /* a page can't blur other apps' windows behind it, so overlay glass is a tinted sheen instead */
   .overlay .glass { background:linear-gradient(160deg, rgba(52,58,74,.86), rgba(15,18,26,.9) 55%);
@@ -131,6 +188,9 @@
 <div id="convo"></div>
 
 <div id="dock" class="s-listen">
+  <div id="caption"></div>
+  <div id="alerts"></div>
+  <div id="task"></div>
   <div id="stage">
     <div id="star"></div>
     <div id="bubble" class="glass">Connecting...</div>
@@ -172,9 +232,18 @@ const STAR = [
   $("star").innerHTML = `<svg viewBox="0 0 15 14" aria-hidden="true">${s}</svg>`;
 })();
 
-let ws, lastTiles = "", lastConvo = "", lastGestureN = null;
+let ws, lastTiles = "", lastConvo = "", lastGestureN = null, lastCaption = "", captionTimer = null;
 const GESTURE_LABEL = {nod: "nod", left: "← tilt", right: "tilt →", select: "smile ✓", cancel: "back"};
 const SUB = {listen: "Nod when it's your turn", computer: "Pick the next step"};
+
+const WELCOME = `<div id="welcome">
+  <h2>Talk and use your Mac with your face</h2>
+  <p class="lead">A friend talks. Blink suggests what you might say or do. You choose with small head and face movements, and it speaks or acts for you. Everything runs on this Mac, with Wi-Fi off.</p>
+  <div class="how glass"><div class="ico">↕</div><b>Nod</b><span>It's my turn: show me replies</span></div>
+  <div class="how glass"><div class="ico">↔</div><b>Tilt your head</b><span>Move the highlight left or right</span></div>
+  <div class="how glass"><div class="ico">☺</div><b>Smile</b><span>Pick the highlighted tile</span></div>
+  <div class="how glass"><div class="ico">◯</div><b>Open your mouth</b><span>Go back, or open the menu</span></div>
+</div>`;
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
@@ -182,8 +251,44 @@ function connect() {
   ws.onclose = () => { $("bubble").textContent = "Reconnecting..."; setTimeout(connect, 800); };
 }
 
+function caption(kind, tag, text, keep) {
+  const el = $("caption");
+  el.className = kind + " show";
+  el.innerHTML = `<b>${tag}</b>${esc(text)}`;
+  clearTimeout(captionTimer);
+  if (!keep) captionTimer = setTimeout(() => el.classList.remove("show"), 9000);
+}
+
 function render(s) {
-  $("dock").className = "s-" + s.mode;
+  $("dock").className = "s-" + s.mode + (s.partial ? " hearing" : "");
+
+  // caption: live words while someone talks, then the finished line, then what he said
+  const last = s.history.at(-1);
+  const capKey = s.partial + "|" + s.history.length + "|" + (last?.text || "");
+  if (capKey !== lastCaption) {
+    lastCaption = capKey;
+    if (s.partial) caption("hearing", "hearing", s.partial, true);
+    else if (last?.who === "friend") caption("heard", "heard", last.text, false);
+    else if (last) caption("said", "you said", last.text, false);
+    else $("caption").classList.remove("show");
+  }
+
+  // alerts: things that stop it working, said plainly
+  const cam = s.camera || {}, al = [];
+  if (cam.error) al.push(["bad", "Camera not available: use the keyboard, or check camera permission"]);
+  else if (cam.on && cam.calibrating) al.push(["info", "Learning your neutral face: sit still for a moment"]);
+  else if (cam.on && !cam.face) al.push(["", "Can't see your face: check the camera and lighting"]);
+  if (!s.stats.bonsai_ok) al.push(["", "Bonsai is offline: showing basic replies"]);
+  if (s.stats.sidecar_ok === false) al.push(["bad", "Voice helper is not answering"]);
+  $("alerts").innerHTML = al.map(([c, t]) => `<span class="alert ${c}">${esc(t)}</span>`).join("");
+
+  // task line: the goal and the steps done so far
+  const task = s.task;
+  $("task").classList.toggle("show", !!(task && (task.goal || task.done.length)));
+  if (task) $("task").innerHTML = (task.goal ? `<span class="goal">${esc(task.goal)}</span>` : "")
+      + task.done.map(d => `<span class="step">${esc(d.replace(/^Pressed "(.*)"$/, "$1")
+          .replace(/^Typed (".*") into .*$/, "wrote $1").replace(/^Opened /, "opened "))}</span>`).join("");
+
   const confirming = s.tiles.some(t => t.kind === "confirm");
   const sub = confirming ? "Tilt to Yes and smile to confirm" : s.mode in SUB ? SUB[s.mode] : "";
   $("bubble").innerHTML = esc(s.status) + (sub ? `<small>${sub}</small>` : "");
@@ -195,10 +300,11 @@ function render(s) {
   const convoKey = s.history.length + "|" + s.partial + "|" + (s.history.at(-1)?.text || "");
   if (convoKey !== lastConvo) {
     lastConvo = convoKey;
-    const recent = s.history.slice(-5);
-    $("convo").innerHTML = recent.map((t, i) =>
+    const recent = s.history.slice(-6);
+    $("convo").innerHTML = (recent.length || s.partial ? "" : WELCOME)
+      + recent.map((t, i) =>
         `<div class="line ${t.who}${i === recent.length - 1 ? " latest" : ""}">${esc(t.text)}</div>`).join("")
-      + (s.partial ? `<div class="line partial">${esc(s.partial)}</div>` : "");
+      + (s.partial ? `<div class="line friend partial">${esc(s.partial)}</div>` : "");
   }
 
   // tiles: rebuild only when the set changes, otherwise just move the highlight (keeps it smooth)
@@ -208,14 +314,18 @@ function render(s) {
     $("tiles").innerHTML = s.mode === "thinking"
       ? '<div class="tile glass skel"></div>'.repeat(4)
       : s.tiles.map(t => {
-          const meta = ["more", "else", "done", "home", "kind"].includes(t.kind) ? " meta" : "";
-          const yes = t.kind === "confirm" && t.value ? " yes" : "";
+          const firstDone = t.kind === "done" && s.tiles[0] === t && s.tiles.length > 1;
+          const meta = ["more", "else", "done", "home", "kind", "phrases", "redraft"].includes(t.kind) && !firstDone ? " meta" : "";
+          const yes = (t.kind === "confirm" && t.value ? " yes" : "") + (firstDone ? " first-done" : "");
+          const len = t.label.length > 60 ? " xlong" : t.label.length > 34 ? " long" : "";
           // computer steps say exactly what will happen: press this, type that, open that
           const a = t.kind === "action" ? t.value : null;
-          const cap = a ? `<span class="cap">${{press: "press", type: "type", open_app: "open"}[a.type] || ""}</span>` : "";
+          const cap = t.kind === "redraft" ? '<span class="cap">rewrite</span>'
+            : t.kind === "confirm" && t.value ? '<span class="cap">this sends it</span>'
+            : a ? `<span class="cap">${{press: "press", type: "type", open_app: "open"}[a.type] || ""}</span>` : "";
           const text = a && a.type === "type" ? `“${esc(a.text)}”` : a && a.type === "open_app" ? esc(a.name) : esc(t.label);
           const then = t.then === "computer" ? '<span class="cap">then does it on the mac</span>' : "";
-          return `<div class="tile glass${meta}${yes}">${cap}<span>${text}</span>${then}</div>`;
+          return `<div class="tile glass${meta}${yes}${len}">${cap}<span>${text}</span>${then}</div>`;
         }).join("");
   }
   if (s.mode !== "thinking")

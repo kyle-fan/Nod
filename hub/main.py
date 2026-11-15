@@ -17,10 +17,15 @@ app = FastAPI()
 
 HOME_TILES = [
     {"label": "Talk", "kind": "home", "value": "talk"},
+    {"label": "Quick phrases", "kind": "home", "value": "phrases"},
     {"label": "Use computer", "kind": "home", "value": "computer"},
     {"label": "Repeat last", "kind": "home", "value": "repeat"},
     {"label": "Back", "kind": "home", "value": "back"},
 ]
+# Things he may need to say with no wait and no Bonsai (works even if the model is down).
+# Override with "phrases" in hub/profile.json. Shown 3 at a time.
+DEFAULT_PHRASES = ["Yes", "No", "Thank you", "I need help", "Give me a minute",
+                   "Can you say that again?", "I'm okay", "Not right now", "Please stop"]
 KIND_TILES = [
     {"label": "Yes", "kind": "kind", "value": "yes"},
     {"label": "No", "kind": "kind", "value": "no"},
@@ -70,9 +75,12 @@ class State:
         self.narrow = new_narrow()   # "More..." narrowing for the current turn
 
     def view(self):
-        return {k: getattr(self, k) for k in
-                ("mode", "status", "tiles", "index", "history", "partial",
-                 "last_gesture", "gesture_n", "stats", "in_computer", "camera")}
+        v = {k: getattr(self, k) for k in
+             ("mode", "status", "tiles", "index", "history", "partial",
+              "last_gesture", "gesture_n", "stats", "in_computer", "camera")}
+        # what the computer task is and how far it has got, for the progress line on screen
+        v["task"] = {"goal": (self.goal or {}).get("goal", ""), "done": self.done[-4:]} if self.in_computer else None
+        return v
 
 
 S = State()
@@ -174,6 +182,17 @@ async def pregenerate(n_turns):
         S.stats.update(latency_ms=ms, bonsai_ok=ok)
 
 
+def show_phrases(page=0):
+    phrases = brain.load_profile().get("phrases") or DEFAULT_PHRASES
+    pages = max(1, -(-len(phrases) // 3))
+    page %= pages
+    tiles = [{"label": p, "kind": "say", "value": p} for p in phrases[page * 3:page * 3 + 3]]
+    if pages > 1:
+        tiles.append({"label": "More phrases", "kind": "phrases", "value": page + 1})
+    tiles.append({"label": "Back", "kind": "home", "value": "back"})
+    set_tiles(tiles, status="Quick phrases")
+
+
 # ---------- computer mode ----------
 
 async def speak(text):
@@ -257,7 +276,11 @@ def confirm_question(action):
     draft = next((e["value"] for e in S.screen.get("elements", [])
                   if e["role"] in sidecar.TYPEABLE and e.get("value")), "")
     if draft and "send" in action["label"].lower():
-        return f'Send "{draft}"?'
+        # Name who it goes to, so a text can't go to the wrong person unnoticed.
+        box = next((e["label"] for e in S.screen.get("elements", [])
+                    if e["role"] in sidecar.TYPEABLE and e.get("value")), "")
+        who = box[len("Message "):].split(":")[0].strip() if box.startswith("Message ") else ""
+        return f'Send "{draft}" to {who}?' if who else f'Send "{draft}"?'
     return f'{action["label"]}?'
 
 
@@ -338,6 +361,8 @@ async def pick(tile):
         v = tile["value"]
         if v == "talk":
             await show_replies()
+        elif v == "phrases":
+            show_phrases()
         elif v == "computer":
             start_task()
             await show_actions()
@@ -358,6 +383,8 @@ async def pick(tile):
             await speak(S.status)
         else:
             await run_action(action)
+    elif k == "phrases":
+        show_phrases(tile["value"])
     elif k == "redraft":
         await show_drafts(tile["value"])
     elif k == "confirm":
