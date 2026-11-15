@@ -507,10 +507,16 @@ async def suggest_actions(history: list[dict], screen: dict, done: list[str] | N
         # to anyone else, and nobody else's chat is offered as the way forward.
         who = _goal_person(info["goal"]) if need == "Messages" and app == "Messages" else ""
         blocked: set[str] = set()
+        if _goal_person(info["goal"]):
+            info["finished"] = False                  # a message is finished when it is sent, not before
         if who:
             box = next((e for e in elements if e["role"] in TYPEABLE and e["label"].startswith("Message ")), None)
             if box:                                   # a chat is open
-                if not _same_person(who, box["label"][len("Message "):].split(":")[0]):
+                if _same_person(who, box["label"][len("Message "):].split(":")[0]):
+                    if not box.get("value"):          # the right chat, nothing written yet: write
+                        write = f'type {box["id"]}'
+                        steps = [write] + [x for x in steps if x != write]
+                else:
                     # someone else's chat: no typing, no sending, go back to the list first
                     blocked |= {k for k, c in choices.items()
                                 if c["type"] == "type" or (c["type"] == "press" and any(
