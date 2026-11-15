@@ -87,6 +87,8 @@ class State:
         self.text_to = ""                  # who "Text someone" is writing to
         self.last_input = time.time()      # last gesture, for putting stale tiles away
         self.tiles_at = 0.0                # when the tiles on screen were put up
+        self.streaming = False             # tiles may be filled in while Bonsai is still writing
+        self.pregen_partial: list[str] = []
         self.done: list[str] = []          # computer steps taken this session
         self.pregen: tuple | None = None   # (history_len, replies, offer_computer, bonsai_ok)
         self.pregen_task: asyncio.Task | None = None
@@ -144,14 +146,24 @@ def text_waiting() -> bool:
 
 # ---------- talk mode ----------
 
+async def stream_tiles(replies, kind="say"):
+    """Replies show up one by one as Bonsai writes them (he can start reading at once;
+    picking waits until all of them are there)."""
+    if S.mode == "thinking" and S.streaming:
+        S.tiles = [{"label": r, "kind": kind, "value": r} for r in replies]
+        await broadcast()
+
+
 async def show_replies(kind=None, path=None):
     fresh = kind is None and not path
     if fresh:
         S.narrow = new_narrow()
     task = S.pregen_task
+    S.streaming = True
     if fresh and not S.pregen and task and not task.done():
         # Nodded while pre-generation is mid-flight: wait for it, don't start a duplicate call.
         S.mode, S.status, S.tiles = "thinking", "Thinking...", []
+        await stream_tiles(S.pregen_partial)   # show what it has written so far
         await broadcast()
         await asyncio.wait([task])   # doesn't raise if the task was cancelled
     if fresh and S.pregen and S.pregen[0] == len(S.history):
@@ -162,7 +174,9 @@ async def show_replies(kind=None, path=None):
         await broadcast()
         offer = fresh and await brain.computer_task(S.history)
         replies, ms, ok = await brain.suggest_replies(
-            S.history, kind=kind, path=path, avoid=None if fresh else S.narrow["rejected"], offer=offer)
+            S.history, kind=kind, path=path, avoid=None if fresh else S.narrow["rejected"], offer=offer,
+            on_partial=stream_tiles)
+    S.streaming = False
     S.stats.update(latency_ms=ms or S.stats["latency_ms"], bonsai_ok=ok)
     # "learn": these came from Bonsai for this conversation, so a pick teaches it his voice
     tiles = [{"label": r, "kind": "say", "value": r, "learn": ok} for r in replies]
@@ -215,7 +229,14 @@ async def pregenerate(n_turns):
     if len(S.history) != n_turns or S.mode != "listen":
         return
     offer = await brain.computer_task(S.history)
-    replies, ms, ok = await brain.suggest_replies(S.history, offer=offer)
+    S.pregen_partial = []
+
+    async def partial(replies):
+        if len(S.history) == n_turns:
+            S.pregen_partial = replies
+            await stream_tiles(replies)      # only shows if he has already nodded
+
+    replies, ms, ok = await brain.suggest_replies(S.history, offer=offer, on_partial=partial)
     if len(S.history) == n_turns:
         S.pregen = (n_turns, replies, offer, ok)
         S.stats.update(latency_ms=ms, bonsai_ok=ok)
@@ -263,10 +284,15 @@ async def show_text_replies():
     S.mode, S.status, S.tiles = "thinking", f'Answering {inc["from"]}...', []
     await broadcast()
     ready, inc["ready"] = inc.get("ready"), None
+    S.streaming = True
     if ready and not S.texts_seen:        # written while the text was sitting there
         replies, ms, ok = await ready
     else:
-        replies, ms, ok = await brain.suggest_text_replies(S.history, inc["from"], inc["text"], S.texts_seen)
+        async def partial(replies):
+            await stream_tiles(replies, kind="textreply")
+        replies, ms, ok = await brain.suggest_text_replies(S.history, inc["from"], inc["text"], S.texts_seen,
+                                                           on_partial=partial)
+    S.streaming = False
     S.stats.update(latency_ms=ms, bonsai_ok=ok)
     S.texts_seen += replies
     tiles = [{"label": r, "kind": "textreply", "value": r} for r in replies]

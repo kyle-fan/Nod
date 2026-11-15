@@ -18,8 +18,18 @@ from hub import brain, config, main, sidecar   # noqa: E402
 CALLS = []
 
 
-async def fake_chat(prompt, max_tokens=220, schema=None, slot=None):
-    """Answers like a sensible Bonsai would, from what the prompt says."""
+async def fake_chat(prompt, max_tokens=220, schema=None, slot=None, on_text=None):
+    """Answers like a sensible Bonsai would, from what the prompt says. With on_text it
+    arrives in small pieces, the way the real server streams."""
+    out = await fake_answer(prompt, schema, slot)
+    if on_text:
+        for i in range(8, len(out) + 8, 8):
+            await on_text(out[:i])
+            await asyncio.sleep(0)
+    return out
+
+
+async def fake_answer(prompt, schema, slot):
     fixed, user = prompt if isinstance(prompt, tuple) else ("", prompt)
     CALLS.append(slot)
     if slot == "task":
@@ -363,6 +373,34 @@ async def test_replies_follow_the_friend_if_they_keep_talking():
     assert CALLS == [] and S.index == 1, "tiles he is choosing from must not change under him"
 
 
+async def test_replies_appear_one_by_one_while_thinking():
+    await fresh()
+    S.history.append({"who": "friend", "text": "want to grab food", "at": 1.0})   # no pre-generation
+    seen = []
+    old = main.broadcast
+
+    async def spy():
+        if S.mode == "thinking":
+            seen.append(tuple(labels()))
+        await old()
+    main.broadcast = spy
+    try:
+        await g("nod")
+    finally:
+        main.broadcast = old
+    assert ("yeah one sec",) in seen and ("yeah one sec", "what time") in seen, seen
+    assert S.mode == "choose" and labels() == ["yeah one sec", "what time", "nah", "More..."]
+    await g("select")          # only after they are all there can he pick
+    assert SPOKEN == ["yeah one sec"]
+
+
+def test_finished_strings():
+    f = brain.finished_strings
+    assert f('{"replies": ["yeah one sec", "what ti') == ["yeah one sec"]
+    assert f('{"replies": ["a", "b \\"quoted\\"", "c"]}') == ["a", 'b "quoted"', "c"]
+    assert f('{"repl') == [] and f('{"replies": [') == []
+
+
 async def test_quick_phrases_need_no_model():
     await fresh()
     CALLS.clear()
@@ -433,7 +471,9 @@ async def run_all():
     failed = 0
     for t in TESTS:
         try:
-            await t()
+            r = t()
+            if asyncio.iscoroutine(r):
+                await r
             print("ok  ", t.__name__)
         except Exception as e:   # noqa: BLE001
             failed += 1

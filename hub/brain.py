@@ -137,7 +137,9 @@ TEMPERATURE = {"actions": 0.2, "task": 0.0}
 
 
 async def _chat(prompt: tuple[str, str] | str, max_tokens: int = 220, schema: dict | None = None,
-                slot: str | None = None) -> str:
+                slot: str | None = None, on_text=None) -> str:
+    """on_text: async callback given the answer so far, each time more of it arrives
+    (the tiles fill in as Bonsai writes instead of all at the end)."""
     fixed, changing = prompt if isinstance(prompt, tuple) else ("", prompt)
     messages = ([{"role": "system", "content": fixed}] if fixed else []) + [{"role": "user", "content": changing}]
     payload = {
@@ -155,10 +157,52 @@ async def _chat(prompt: tuple[str, str] | str, max_tokens: int = 220, schema: di
         payload["response_format"] = {"type": "json_schema",
                                       "json_schema": {"name": "out", "schema": schema}}
     async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.post(config.BONSAI_URL, json=payload)
-        r.raise_for_status()
-        text = r.json()["choices"][0]["message"]["content"] or ""
+        if on_text is None:
+            r = await client.post(config.BONSAI_URL, json=payload)
+            r.raise_for_status()
+            text = r.json()["choices"][0]["message"]["content"] or ""
+        else:
+            payload["stream"] = True
+            text = ""
+            async with client.stream("POST", config.BONSAI_URL, json=payload) as r:
+                r.raise_for_status()
+                async for line in r.aiter_lines():
+                    if not line.startswith("data: ") or line[6:].strip() == "[DONE]":
+                        continue
+                    delta = (json.loads(line[6:])["choices"][0].get("delta") or {}).get("content") or ""
+                    if delta:
+                        text += delta
+                        await on_text(text)
     return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+
+
+def finished_strings(text: str) -> list[str]:
+    """The list items Bonsai has finished writing so far in a half-written {"replies": [..."""
+    start = text.find("[")
+    if start < 0:
+        return []
+    out = []
+    for m in re.finditer(r'"((?:[^"\\]|\\.)*)"', text[start:]):
+        try:
+            out.append(json.loads(f'"{m.group(1)}"').strip())
+        except ValueError:
+            pass
+    return [x for x in out if x]
+
+
+def _stream_to(on_partial):
+    """Wrap a tiles callback so it fires once per newly finished reply."""
+    if on_partial is None:
+        return None
+    seen = 0
+
+    async def on_text(text):
+        nonlocal seen
+        done = finished_strings(text)
+        if len(done) > seen:
+            seen = len(done)
+            await on_partial(done[:3])
+    return on_text
 
 
 def _parse_json(text: str, key: str) -> list:
@@ -195,7 +239,7 @@ async def computer_task(history: list[dict]) -> bool:
 async def suggest_replies(history: list[dict], kind: str | None = None,
                           path: list[str] | None = None,
                           avoid: list[str] | None = None,
-                          offer: bool = False) -> tuple[list[str], int, bool]:
+                          offer: bool = False, on_partial=None) -> tuple[list[str], int, bool]:
     """Returns (replies, latency_ms, ok). ok=False means Bonsai failed and we used fallbacks.
 
     kind: a fixed fallback kind (yes/no/question/else). path: narrowing options the
@@ -221,7 +265,8 @@ async def suggest_replies(history: list[dict], kind: str | None = None,
                      learned=_learned_text())
     t0 = time.perf_counter()
     try:
-        out = await _chat(prompt, schema=QUESTION_SCHEMA if wants_question else REPLY_SCHEMA, slot="reply")
+        out = await _chat(prompt, schema=QUESTION_SCHEMA if wants_question else REPLY_SCHEMA, slot="reply",
+                          on_text=_stream_to(on_partial))
         replies = [str(r).strip() for r in _parse_json(out, "replies") if str(r).strip()]
         if not replies:  # malformed JSON: salvage the quoted strings, never raw lines
             quoted = re.findall(r'"((?:[^"\\]|\\.)+)"', out)
@@ -235,7 +280,7 @@ async def suggest_replies(history: list[dict], kind: str | None = None,
 
 
 async def suggest_text_replies(history: list[dict], who: str, text: str,
-                               avoid: list[str] | None = None) -> tuple[list[str], int, bool]:
+                               avoid: list[str] | None = None, on_partial=None) -> tuple[list[str], int, bool]:
     """3 answers to a text message that just came in. Returns (replies, ms, ok)."""
     p = load_profile()
     spoken = [t for t in history if t["who"] in ("friend", "me")][-4:]
@@ -245,7 +290,8 @@ async def suggest_text_replies(history: list[dict], who: str, text: str,
                             + "; ".join(avoid) + "\n") if avoid else "")
     t0 = time.perf_counter()
     try:
-        out = await _chat(prompt, max_tokens=120, schema=REPLY_SCHEMA, slot="textreply")
+        out = await _chat(prompt, max_tokens=120, schema=REPLY_SCHEMA, slot="textreply",
+                          on_text=_stream_to(on_partial))
         low = {a.lower() for a in avoid or []}
         replies = [r for r in dict.fromkeys(str(x).strip() for x in _parse_json(out, "replies"))
                    if r and r.lower() not in low]

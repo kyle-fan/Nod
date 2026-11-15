@@ -103,6 +103,8 @@
   .tile.meta { color:var(--dim); font-size:20px; border-style:dashed; }
   .tile.meta.on { color:var(--text); }
   .tile.skel { animation:shimmer 1.1s ease-in-out infinite; }
+  .tile.arriving { animation:arrive .25s ease-out; }
+  @keyframes arrive { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
   .tile.skel:nth-child(2) { animation-delay:.12s; } .tile.skel:nth-child(3) { animation-delay:.24s; }
   .tile.skel:nth-child(4) { animation-delay:.36s; }
 
@@ -321,12 +323,12 @@ function render(s) {
   }
 
   // tiles: rebuild only when the set changes, otherwise just move the highlight (keeps it smooth)
-  const key = s.mode === "thinking" ? "thinking" : JSON.stringify(s.tiles.map(t => [t.kind, t.label]));
+  const thinking = s.mode === "thinking";
+  const key = (thinking ? "thinking" : "") + JSON.stringify(s.tiles.map(t => [t.kind, t.label]));
   if (key !== lastTiles) {
     lastTiles = key;
-    $("tiles").innerHTML = s.mode === "thinking"
-      ? '<div class="tile glass skel"></div>'.repeat(4)
-      : s.tiles.map(t => {
+    // while thinking, replies that are already written are shown; the rest are placeholders
+    $("tiles").innerHTML = s.tiles.map(t => {
           const firstDone = t.kind === "done" && s.tiles[0] === t && s.tiles.length > 1;
           const meta = ["more", "else", "done", "home", "kind", "phrases", "redraft", "textmore", "textskip", "newtextmore"].includes(t.kind) && !firstDone ? " meta" : "";
           const yes = (t.kind === "confirm" && t.value ? " yes" : "") + (firstDone ? " first-done" : "");
@@ -341,8 +343,8 @@ function render(s) {
             : a ? `<span class="cap">${{press: "press", type: "type", open_app: "open"}[a.type] || ""}</span>` : "";
           const text = a && a.type === "type" ? `“${esc(a.text)}”` : a && a.type === "open_app" ? esc(a.name) : esc(t.label);
           const then = t.then === "computer" ? '<span class="cap">then does it on the mac</span>' : "";
-          return `<div class="tile glass${meta}${yes}${len}">${cap}<span>${text}</span>${then}</div>`;
-        }).join("");
+          return `<div class="tile glass${meta}${yes}${len}${thinking ? " arriving" : ""}">${cap}<span>${text}</span>${then}</div>`;
+        }).join("") + (thinking ? '<div class="tile glass skel"></div>'.repeat(Math.max(0, 4 - s.tiles.length)) : "");
   }
   if (s.mode !== "thinking")
     [...$("tiles").children].forEach((el, i) => el.classList.toggle("on", i === s.index));
