@@ -90,6 +90,7 @@ class State:
         self.streaming = False             # tiles may be filled in while Bonsai is still writing
         self.pregen_partial: list[str] = []
         self.pregen_for = 0                # the history length those partial replies answer
+        self.prepared_for = -1             # the history length the prepared first step belongs to
         self.done: list[str] = []          # computer steps taken this session
         self.pregen: tuple | None = None   # (history_len, replies, offer_computer, bonsai_ok)
         self.pregen_task: asyncio.Task | None = None
@@ -223,10 +224,12 @@ async def say(text, then=None):
         await show_new_texts()
         return
     if then == "computer":   # he just agreed to do something on the Mac: start doing it
-        start_task()
-        # Read the screen and ask Bonsai for the first step while the reply is being spoken,
-        # so the tiles are ready the moment he stops talking.
-        S.prepared = asyncio.create_task(prepare_actions())
+        ahead = S.prepared is not None and S.prepared_for == len(S.history) - 1
+        start_task(keep_prepared=ahead)
+        if not ahead:
+            # Read the screen and ask Bonsai for the first step while the reply is being
+            # spoken, so the tiles are ready the moment he stops talking.
+            S.prepared = asyncio.create_task(prepare_actions())
     await speak(text)
     if then == "computer":
         await show_actions()
@@ -247,6 +250,12 @@ async def pregenerate(n_turns):
             await stream_tiles(replies)      # only shows if he has already nodded
 
     replies, ms, ok = await brain.suggest_replies(S.history, offer=offer, on_partial=partial)
+    if offer and len(S.history) == n_turns and S.mode in ("listen", "thinking", "choose"):
+        # The friend asked for something on the Mac. Work out the first step now, before he
+        # has even nodded, so it is on screen the instant he agrees.
+        if S.prepared:
+            S.prepared.cancel()
+        S.prepared, S.prepared_for = asyncio.create_task(prepare_actions(list(S.history))), n_turns
     if len(S.history) == n_turns:
         S.pregen = (n_turns, replies, offer, ok)
         S.stats.update(latency_ms=ms, bonsai_ok=ok)
@@ -413,15 +422,20 @@ async def speak(text):
         S.stats["sidecar_ok"] = True
 
 
-def start_task():
+def start_task(keep_prepared=False):
     S.done, S.goal, S.drafts_seen = [], None, []
-    if S.prepared:
-        S.prepared.cancel()
-    S.prepared = None
+    if not keep_prepared:
+        if S.prepared:
+            S.prepared.cancel()
+        S.prepared = None
 
 
-async def prepare_actions():
+async def prepare_actions(history=None):
+    """Read the screen and ask Bonsai for the next step. With `history` given it is the first
+    step of a task that hasn't started yet (prepared ahead of time)."""
     screen = await sidecar.screen()
+    if history is not None:
+        return screen, await brain.suggest_actions(history, screen, [], None)
     return screen, await brain.suggest_actions(S.history, screen, S.done, S.goal)
 
 
@@ -807,6 +821,7 @@ async def ws_endpoint(ws: WebSocket):
             elif msg.get("type") == "reset":
                 S.history.clear()
                 S.incoming, S.pregen, S.paused = None, None, False
+                start_task()
                 sidecar.FAKE.reset()
                 go_listen()
                 await broadcast()

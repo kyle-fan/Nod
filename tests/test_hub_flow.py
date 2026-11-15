@@ -518,6 +518,25 @@ async def test_wordings_that_are_not_messages_to_the_person_are_dropped():
     assert drafts == ["bring the controller"], drafts
 
 
+async def test_first_computer_step_is_ready_before_he_agrees():
+    await fresh()
+    await friend("can you tell Andrew to come back")       # pre-generation also prepares step 1
+    await asyncio.sleep(0.05)
+    assert S.prepared is not None and S.prepared_for == 1
+    CALLS.clear()
+    await g("nod", "select")
+    assert labels()[0] == "Andrew", labels()
+    assert "actions" not in CALLS, "the first step was already worked out"
+    # a prepared step for an old line is not reused for a new request
+    await fresh()
+    await friend("can you tell Andrew to come back")
+    await asyncio.sleep(0.05)
+    await friend("actually can you put the yankees game on")
+    await asyncio.sleep(0.05)
+    await g("nod", "select")
+    assert S.view()["task"]["goal"] == "put the yankees game on", S.view()["task"]
+
+
 async def test_quick_phrases_need_no_model():
     await fresh()
     CALLS.clear()
