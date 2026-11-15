@@ -172,6 +172,8 @@ func runSidecar() async throws {
     // Dev only: relaunch the (rebuilt) binary from inside this process, so it keeps the
     // Microphone / Accessibility permission of the terminal that first started it.
     await server.appendRoute("POST /restart") { _ in
+        // Keep the overlay across the relaunch if it is showing now.
+        if await MainActor.run(body: { overlayWindow != nil }) { setenv("NOD_OVERLAY", "1", 1) }
         let binary = CommandLine.arguments[0]
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/sh")

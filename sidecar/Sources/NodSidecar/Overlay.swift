@@ -19,18 +19,21 @@ final class Overlay: NSObject, WKNavigationDelegate {
 
     func show() {
         guard let screen = NSScreen.main else { return }
+        // Sit on top of the Dock, not behind it: visibleFrame excludes the Dock and menu bar.
         let full = screen.frame
-        let frame = NSRect(x: full.minX, y: full.minY, width: full.width, height: full.height * heightFraction)
+        let visible = screen.visibleFrame
+        let frame = NSRect(x: full.minX, y: visible.minY, width: full.width,
+                           height: min(full.height * heightFraction, visible.height))
 
         let panel = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel],
                             backing: .buffered, defer: false)
-        panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.ignoresMouseEvents = true          // click-through
         panel.hidesOnDeactivate = false
         panel.isFloatingPanel = true
+        panel.level = .statusBar                 // above normal windows and the Dock
         panel.becomesKeyOnlyIfNeeded = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
 
