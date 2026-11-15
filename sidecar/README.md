@@ -39,9 +39,16 @@ Settings (environment variables, all optional):
 | `NOD_EARS` | `1` | `0` turns the microphone off |
 | `NOD_AUDIO_FILE` | unset | Test only: feed a wav file instead of the microphone |
 | `NOD_DEBUG` | `0` | `1` logs transcription timings |
+| `NOD_OVERLAY` | `0` | `1` opens the floating, click-through tile window (loads the hub page with `?overlay=1`) |
+| `NOD_OVERLAY_HEIGHT` | `0.34` | Share of the screen height the overlay covers, from the bottom |
+| `NOD_IGNORE_APPS` | `Terminal,iTerm2,Claude,Xcode` | Apps `/screen` never treats as the app to control |
 
-Files: `main.swift` (server and routes), `Voice.swift` (TTSKit and the mute gate),
-`Ears.swift` (mic, WhisperKit, `/heard`), `Hands.swift` (`/screen`, `/act`).
+Files: `Sidecar.swift` (entry point, server and routes), `Voice.swift` (TTSKit and the mute gate),
+`Ears.swift` (mic, WhisperKit, `/heard`), `Hands.swift` (`/screen`, `/act`), `Overlay.swift` (floating tile window).
+
+`/screen` and `/act` target the frontmost app that is not Blink itself (the overlay, the terminal, or a
+browser tab titled "Blink"). `curl "localhost:8790/axdump?app=Messages"` prints an app's raw
+accessibility tree, for working out how a new app exposes its controls.
 
 ## What it does
 

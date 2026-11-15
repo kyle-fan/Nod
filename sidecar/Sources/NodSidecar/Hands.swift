@@ -8,6 +8,53 @@ final class Hands: @unchecked Sendable {
     private let lock = NSLock()
     private var elements: [Int: AXUIElement] = [:]   // valid until the next /screen
     private var roles: [Int: String] = [:]
+    private var sendFieldID: [Int: AXUIElement] = [:]   // synthetic "Send" ids -> the message field
+    private var lastTarget: NSRunningApplication?        // last real app in front (never Blink itself)
+    private let ignoredApps: Set<String>
+    private static let browsers: Set<String> = [
+        "com.apple.Safari", "com.google.Chrome", "company.thebrowser.Browser", "org.mozilla.firefox",
+        "com.microsoft.edgemac", "com.brave.Browser",
+    ]
+
+    init(env: [String: String]) {
+        // Apps that are part of running Nod, never the thing the user wants to control.
+        let names = env["NOD_IGNORE_APPS"] ?? "Terminal,iTerm2,Claude,Xcode"
+        ignoredApps = Set(names.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() })
+    }
+
+    /// Keep track of the app in front so /screen can skip Blink's own window (SPEC "Overlay window").
+    func watchFrontmost() async {
+        while !Task.isCancelled {
+            if Hands.trusted { _ = targetApp() }
+            try? await Task.sleep(nanoseconds: 700_000_000)
+        }
+    }
+
+    /// True for windows that are Nod itself: this process (the overlay), the terminal that
+    /// launched it, or a browser tab showing the hub page (its title is "Blink").
+    private func isBlink(_ app: NSRunningApplication) -> Bool {
+        if app.processIdentifier == ProcessInfo.processInfo.processIdentifier { return true }
+        if let name = app.localizedName?.lowercased(), ignoredApps.contains(name) { return true }
+        if let bundle = app.bundleIdentifier, Hands.browsers.contains(bundle) {
+            let appEl = AXUIElementCreateApplication(app.processIdentifier)
+            AXUIElementSetMessagingTimeout(appEl, 0.5)
+            if let window = attr(appEl, kAXFocusedWindowAttribute),
+               let title = string(window as! AXUIElement, kAXTitleAttribute),
+               title.lowercased().contains("blink") { return true }
+        }
+        return false
+    }
+
+    /// The frontmost app that is not Blink. Falls back to whatever is in front.
+    private func targetApp() -> NSRunningApplication? {
+        let front = frontmostApp()
+        if let front, !isBlink(front) {
+            lock.withLock { lastTarget = front }
+            return front
+        }
+        if let last = lock.withLock({ lastTarget }), !last.isTerminated { return last }
+        return front
+    }
 
     private let maxElements = 40
     private let maxDepth = 25
@@ -86,7 +133,7 @@ final class Hands: @unchecked Sendable {
         var text = string(el, kAXTitleAttribute)
             ?? string(el, kAXDescriptionAttribute)
             ?? string(el, kAXPlaceholderValueAttribute)
-        if text == nil, role == "textfield" { text = string(el, kAXValueAttribute) }
+        if text == nil, role == "textfield" { text = "Text field" }
         if text == nil, let titleEl = attr(el, kAXTitleUIElementAttribute) {
             text = string(titleEl as! AXUIElement, kAXValueAttribute) ?? string(titleEl as! AXUIElement, kAXTitleAttribute)
         }
@@ -111,7 +158,7 @@ final class Hands: @unchecked Sendable {
 
     func screen(appName: String? = nil) -> [String: Any] {
         guard Hands.trusted else { return ["app": "", "elements": [], "error": Hands.permissionError] }
-        guard let app = (appName.flatMap { runningApp(named: $0) }) ?? frontmostApp() else {
+        guard let app = (appName.flatMap { runningApp(named: $0) }) ?? targetApp() else {
             return ["app": "", "elements": []]
         }
         let appEl = AXUIElementCreateApplication(app.processIdentifier)
@@ -162,14 +209,34 @@ final class Hands: @unchecked Sendable {
         var out: [[String: Any]] = []
         var map: [Int: AXUIElement] = [:]
         var roleMap: [Int: String] = [:]
+        var sendMap: [Int: AXUIElement] = [:]
         var id = 0
+        var hasSend = false
+        var messageField: AXUIElement?
+        let isMessages = app.bundleIdentifier == "com.apple.MobileSMS"
         for i in found.indices.sorted() where keep.contains(i) {
             id += 1
             map[id] = found[i].el
             roleMap[id] = found[i].role
-            out.append(["id": id, "role": found[i].role, "label": found[i].label])
+            var item: [String: Any] = ["id": id, "role": found[i].role, "label": found[i].label]
+            if found[i].role == "textfield" {
+                // The hub reads "value" to know a message has been typed.
+                item["value"] = (attr(found[i].el, kAXValueAttribute) as? String) ?? ""
+                let lower = found[i].label.lowercased()
+                if isMessages, lower.contains("message") { messageField = found[i].el }
+            } else if found[i].label.lowercased().contains("send") {
+                hasSend = true
+            }
+            out.append(item)
         }
-        lock.withLock { elements = map; roles = roleMap }
+        // Messages sends with Return and shows no Send control. Offer one so the hub can
+        // ask "Send ...?" first; pressing it posts Return to the message field.
+        if isMessages, !hasSend, let field = messageField {
+            id += 1
+            sendMap[id] = field
+            out.append(["id": id, "role": "button", "label": "Send"])
+        }
+        lock.withLock { elements = map; roles = roleMap; sendFieldID = sendMap }
         return ["app": app.localizedName ?? "", "elements": out]
     }
 
@@ -184,6 +251,7 @@ final class Hands: @unchecked Sendable {
         guard type == "press" || type == "type" else { return err("unknown type '\(type)'") }
         guard Hands.trusted else { return err(Hands.permissionError) }
         let id = (action["id"] as? Int) ?? Int(action["id"] as? String ?? "") ?? -1
+        if type == "press", let field = lock.withLock({ sendFieldID[id] }) { return await pressReturn(in: field) }
         guard let el = lock.withLock({ elements[id] }) else {
             return err("unknown id \(id): call /screen first, ids only last until the next /screen")
         }
@@ -231,8 +299,43 @@ final class Hands: @unchecked Sendable {
             click(at: point)
             try? await Task.sleep(nanoseconds: 200_000_000)
         }
+        selectAll()
         keystrokes(clean)
         return ["ok": true]
+    }
+
+    /// The confirmed "Send": focus the message field and press Return in its app.
+    private func pressReturn(in field: AXUIElement) async -> [String: Any] {
+        guard ((attr(field, kAXValueAttribute) as? String) ?? "").isEmpty == false else {
+            return err("nothing to send")
+        }
+        var pid: pid_t = 0
+        guard AXUIElementGetPid(field, &pid) == .success, let app = NSRunningApplication(processIdentifier: pid) else {
+            return err("element is gone: call /screen again")
+        }
+        if !app.isActive {
+            app.activate()
+            try? await Task.sleep(nanoseconds: 300_000_000)
+        }
+        AXUIElementSetAttributeValue(field, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        let source = CGEventSource(stateID: .hidSystemState)
+        for down in [true, false] {
+            CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: down)?.postToPid(pid)
+            usleep(30_000)
+        }
+        return ["ok": true]
+    }
+
+    /// Select everything in the focused field so typed text replaces it.
+    private func selectAll() {
+        let source = CGEventSource(stateID: .hidSystemState)
+        for down in [true, false] {
+            let event = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: down) // "A"
+            event?.flags = .maskCommand
+            event?.post(tap: .cghidEventTap)
+            usleep(30_000)
+        }
     }
 
     private func center(of el: AXUIElement) -> CGPoint? {
@@ -268,6 +371,7 @@ final class Hands: @unchecked Sendable {
 
     private func openApp(_ name: String) async -> [String: Any] {
         if let running = runningApp(named: name) {
+            lock.withLock { lastTarget = running }
             running.activate(options: [.activateAllWindows])
             try? await Task.sleep(nanoseconds: 500_000_000)
             return ["ok": true]
@@ -286,11 +390,42 @@ final class Hands: @unchecked Sendable {
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
         do {
-            _ = try await NSWorkspace.shared.openApplication(at: url, configuration: config)
+            let opened = try await NSWorkspace.shared.openApplication(at: url, configuration: config)
+            lock.withLock { lastTarget = opened }
             try? await Task.sleep(nanoseconds: 500_000_000)
             return ["ok": true]
         } catch {
             return err("could not open \(name): \(error.localizedDescription)")
         }
+    }
+
+    // MARK: Debug
+
+    /// Raw accessibility tree of an app, for working out how a new app exposes its controls.
+    func dump(appName: String?, maxDepth: Int = 14) -> String {
+        guard Hands.trusted else { return Hands.permissionError }
+        guard let app = (appName.flatMap { runningApp(named: $0) }) ?? targetApp() else { return "no app" }
+        let appEl = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(appEl, 1.0)
+        var lines = ["app: \(app.localizedName ?? "?") (\(app.bundleIdentifier ?? "?"))"]
+        var count = 0
+        func short(_ s: String?) -> String? { s.map { $0.count > 60 ? String($0.prefix(57)) + "..." : $0 } }
+        func walk(_ el: AXUIElement, _ depth: Int) {
+            guard depth <= maxDepth, count < 1500 else { return }
+            count += 1
+            var parts = [String(repeating: "  ", count: depth) + (string(el, kAXRoleAttribute) ?? "?")]
+            if let v = string(el, kAXSubroleAttribute) { parts.append("sub=\(v)") }
+            if let v = short(string(el, kAXTitleAttribute)) { parts.append("title=\"\(v)\"") }
+            if let v = short(string(el, kAXDescriptionAttribute)) { parts.append("desc=\"\(v)\"") }
+            if let v = short(string(el, kAXPlaceholderValueAttribute)) { parts.append("placeholder=\"\(v)\"") }
+            if let v = short(string(el, kAXValueAttribute)) { parts.append("value=\"\(v)\"") }
+            if let v = short(string(el, "AXIdentifier")) { parts.append("id=\(v)") }
+            let acts = actions(el).filter { $0.hasPrefix("AX") }
+            if !acts.isEmpty { parts.append("actions=\(acts.joined(separator: ","))") }
+            lines.append(parts.joined(separator: " "))
+            for child in children(el) { walk(child, depth + 1) }
+        }
+        for w in (attr(appEl, kAXWindowsAttribute) as? [AXUIElement]) ?? [] { walk(w, 0) }
+        return lines.joined(separator: "\n")
     }
 }
