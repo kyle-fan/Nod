@@ -63,6 +63,7 @@ class GestureDetector:
         self._recal = threading.Event()
         self.face_ok = False        # a face is in view right now
         self.calibrating = True     # still learning the neutral pose
+        self.error = ""             # set when the camera can't be opened or stops
 
     def start(self):
         threading.Thread(target=self.run, daemon=True).start()
@@ -83,7 +84,7 @@ class GestureDetector:
 
     def status(self) -> dict:
         """For the screen: is the camera delivering a face, and is it still learning neutral?"""
-        return {"on": True, "face": self.face_ok, "calibrating": self.calibrating}
+        return {"on": True, "face": self.face_ok, "calibrating": self.calibrating, "error": self.error}
 
     def run(self):
         """The gesture rules live in hub/gestures.py (testable without a camera)."""
@@ -119,6 +120,8 @@ class GestureDetector:
                 print(f"[face] {name}")
                 self.on_event(name)
         self.face_ok = False
+        if not self._stop.is_set():   # the camera loop ended on its own
+            self.error = "Camera not available. Check camera permission, or CAMERA_INDEX."
 
 
 def signals(camera_index: int = 0, stop: threading.Event | None = None, misses: bool = False):

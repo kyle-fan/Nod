@@ -57,7 +57,7 @@ class State:
         self.stats = {"latency_ms": None, "model": "Bonsai 2 · on-device", "bonsai_ok": True,
                       "sidecar_ok": True}
         # camera: on = gestures come from the webcam; face = a face is in view right now
-        self.camera = {"on": False, "face": False, "calibrating": False}
+        self.camera = {"on": False, "face": False, "calibrating": False, "error": ""}
         self.in_computer = False
         self.screen: dict = {}
         self.pending: dict | None = None   # action waiting for confirmation
