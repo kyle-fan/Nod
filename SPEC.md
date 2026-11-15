@@ -170,7 +170,8 @@ How a computer step is chosen (`prompts/actions.txt`, `prompts/message.txt`):
 - Bonsai answers with short step codes ("press 3", "type 2", "open Safari") and the goal is decided once per task, which keeps a step to 1.5-2.5 s.
 - Fixed rules sit around Bonsai's answer: the person the friend named out loud is the recipient; once a message is typed, Send is the first tile; a control already pressed in this task is not offered again; only message boxes get typed into.
 - Recipient guards: if the person the text is for has no chat on screen, the only tile is Done ("Can't see a chat with X in Messages"), never someone else's chat. If another person's chat is open, typing and Send are withheld and "Back to conversations" comes first.
-- The first step is worked out while the spoken reply ("yeah one sec") is still playing.
+- The first step is worked out as soon as the friend asks (during reply pre-generation), so it is on screen the moment he agrees.
+- A long screen (30 chats, 40 links) is shortlisted before Bonsai sees it: text boxes, the first dozen items, and anything the friend or the goal names.
 
 Prompt files (`prompts/*.txt`) have two parts split by a line of `=====`. Above it is what never changes between calls (who he is, the rules): it is sent as the system message and llama-server keeps it cached. Below it is what changed (conversation, screen). Keep anything that varies below the line.
 
