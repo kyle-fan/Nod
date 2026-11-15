@@ -21,7 +21,7 @@ NOD_OVERLAY=1 USE_CAMERA=1 ./start.sh                 # from Terminal, as before
 
 Then, with Messages open:
 
-1. Say "can you tell Caden Ruan to come back", nod, smile on the first tile each time. The whole chain should take about 11 seconds.
+1. Say "can you tell Caden Ruan to come back", nod, smile on the first tile each time. On the practice Mac the whole chain takes about 9 seconds.
 2. Open your mouth for the menu. Try **Quick phrases** and **Text someone**.
 3. In the Chrome tab's dev box type `/text Andrew: where are you` and nod. (To have real incoming texts trigger this, start with `NOD_WATCH_MESSAGES=1`.)
 
@@ -32,7 +32,7 @@ Then, with Messages open:
 | | Before | Now |
 |---|---|---|
 | One computer step ("Reading the screen...") | 4 to 7 s | 1.5 to 2.5 s |
-| Whole texting chain, friend's request to sent | about 45 s | about 11 s |
+| Whole texting chain, friend's request to sent | about 45 s | about 9 s |
 | First reply tile after a nod with nothing prepared | about 2 s for all three | first at 0.6 s, they appear one by one |
 | Confirming a send | wait for the spoken question to finish | answer while it is still speaking |
 
@@ -40,13 +40,16 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 
 ### More reliable
 
-- **27 of 27** practice chains ended correctly (right person, right message, or right page), always picking the first tile. Before the fixes below it was 16 of 18.
+- **72 of 72** practice chains ended correctly (right person, right message, or right page), always picking the first tile, over five runs with the real model. Before the fixes below it was 16 of 18.
+- On a chat list the size of yours (12 names) and a busy sports page (25 links), the first tile was right in all 16 cases I tried.
 - **Wrong recipient fixed.** "Let mom know I'll call her tonight" used to open Andrew's chat, because the profile calls him the best friend. The person the friend names is now always the recipient, and the confirmation says who it goes to: `Send "i'll call you tonight" to Mom?`
 - **No chat, no guess.** If the person has no chat on screen, the only tile is Done ("Can't see a chat with Coach in Messages"). Last night it opened someone else's chat. And if another person's chat is open, nothing can be typed or sent there: "Back to conversations" comes first.
 - **Never stuck.** A sidecar restart mid-speech (what froze it on "Speaking" last night), a Bonsai failure, or any error now returns to listening with a plain message.
 - **No repeated steps**, and Send is always the first tile once a message is typed.
 - **Knows when it is finished**: "That looks done" with Done first, after Play or after opening the page that was asked for.
-- **Messages worded properly**: "ask Andrew if he wants pizza" becomes "do you want pizza", not "sure".
+- **Messages worded properly**: "ask Andrew if he wants pizza" becomes "do you want pizza", not "sure", and "let mom know I'll call her tonight" becomes "i'll call you tonight", not "i'll call her tonight".
+- **Passing something on is not hijacked** by the other person's last text in that chat. That only shapes the wording when the task is to answer it.
+- **Replies fit the kind of line**: a yes-or-no question gets a clear yes and a clear no; "thai or pizza" gets one of each; a question about a fact Bonsai can't know gets "not sure" instead of a made-up answer (mostly: it still slips sometimes).
 
 ### Gestures
 
@@ -88,7 +91,8 @@ How: prompts are split into a fixed part that llama-server caches and a changing
 ### Tools
 
 - `./doctor.sh`: checks models on disk, permissions, microphone, camera, sound devices and all three services.
-- `./test.sh`: over 60 checks in a few seconds, no model or hardware needed. `./test.sh --all` also runs the real sidecar on a recording, silently.
+- `./test.sh`: about 75 checks in a few seconds, no model or hardware needed.
+- `./rehearse.sh` starts the pretend-Mac rehearsal in one command, and `tools/autoplay.py` plays the whole demo by itself on it. `./test.sh --all` also runs the real sidecar on a recording, silently.
 - `NOD_SILENT=1` or `curl -X POST 'localhost:8790/quiet?on=1'`: rehearse without sound.
 
 ## What I could not check, and you should

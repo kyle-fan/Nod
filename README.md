@@ -11,7 +11,7 @@ Built for the Local AI Hackathon (Recreate theme). Bonsai 2 predicts what you wa
 Theo can't speak clearly or use his hands. With Blink:
 
 - **A friend talks, Theo answers.** Blink transcribes the friend, Bonsai suggests three replies, Theo tilts his head to choose and smiles to pick, and the Mac says it in his voice. The replies are ready before he nods.
-- **A friend asks him to do something, and he does it.** "Can you tell Andrew to come back?" becomes: agree out loud, open Andrew's chat, pick a wording, confirm, sent. About 11 seconds and five picks.
+- **A friend asks him to do something, and he does it.** "Can you tell Andrew to come back?" becomes: agree out loud, open Andrew's chat, pick a wording, confirm, sent. About 9 seconds and five picks (three with `EXPRESS=1`).
 - **A text arrives, and he answers it.** "Andrew texted you. Nod to answer." One pick opens Messages, opens the chat and types the answer; a second confirms it.
 - **He starts things himself.** Open mouth for the menu: quick phrases that need no model ("I need help"), text someone, use the computer step by step, repeat the last thing said, or stop listening.
 - **It learns his voice.** The replies he actually picks are kept on the Mac and shown to Bonsai as examples, so suggestions drift toward how he really talks.
@@ -123,7 +123,7 @@ What keeps it safe:
 ## Tests
 
 ```bash
-./test.sh        # over 60 checks in a few seconds: no model, camera, microphone or network needed
+./test.sh        # about 75 checks in a few seconds: no model, camera, microphone or network needed
 ./test.sh --all  # also runs the real sidecar on a recording, silently (about a minute)
 ```
 
