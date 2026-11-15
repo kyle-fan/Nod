@@ -42,6 +42,7 @@
 </div>
 <script>
 const $ = id => document.getElementById(id);
+const recent = [];
 const esc = x => String(x).replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 const ago = (now, t) => { const s = now - t; return s < 60 ? s.toFixed(0) + " s ago" : (s / 60).toFixed(0) + " min ago"; };
 const pill = (cls, text) => `<span class="pill ${cls}">${esc(text)}</span>`;
@@ -77,9 +78,20 @@ async function tick() {
   else if (!g.reading) $("face").innerHTML = '<p class="muted">Waiting for a face and a neutral pose...</p>';
   else {
     const [p, r, s, j] = g.reading, t = g.thresholds;
+    // the furthest each reading got in the last 4 seconds: easier to read than a moving bar
+    recent.push([d.now, p, r, s, j]);
+    while (recent.length && d.now - recent[0][0] > 4) recent.shift();
+    const dip = Math.min(...recent.map(x => x[1])), tiltL = Math.min(...recent.map(x => x[2])), tiltR = Math.max(...recent.map(x => x[2]));
+    const smile = Math.max(...recent.map(x => x[3])), mouth = Math.max(...recent.map(x => x[4]));
+    const mark = (ok) => ok ? '<b style="color:var(--star)">enough</b>' : '<span class="muted">not enough</span>';
     $("face").innerHTML =
       centred("Nod", p, t.nod, 30, "°", true) + centred("Tilt", r, t.tilt, 25, "°", false)
       + upward(g.select_signal === "brow" ? "Eyebrows" : "Smile", s, t.select, 1, "") + upward("Mouth", j, t.jaw, 1, "")
+      + `<table style="margin-top:8px"><tr><td style="width:auto">In the last 4 s</td><td></td></tr>
+           <tr><td style="width:auto">deepest dip</td><td>${dip.toFixed(1)}° ${mark(dip < -t.nod)} for a nod (needs ${t.nod}°)</td></tr>
+           <tr><td style="width:auto">furthest tilt</td><td>${tiltL.toFixed(1)}° / +${tiltR.toFixed(1)}° ${mark(Math.max(-tiltL, tiltR) > t.tilt)} (needs ${t.tilt}°)</td></tr>
+           <tr><td style="width:auto">biggest smile</td><td>${smile.toFixed(2)} ${mark(smile > t.select)} to pick (needs ${t.select})</td></tr>
+           <tr><td style="width:auto">widest mouth</td><td>${mouth.toFixed(2)} ${mark(mouth > t.jaw)} to go back (needs ${t.jaw})</td></tr></table>`
       + `<p class="muted">Red lines are the thresholds (top of hub/face.py). A bar turns yellow when it is past one.
          Nod is the dip below neutral. ${g.fps} frames a second, ${esc(g.rules)} rules.</p>`;
   }
