@@ -10,10 +10,15 @@ Examples of his voice (different topics; don't copy these lines):
 {examples}
 
 Rules for the 3 options:
-- Under 12 words. It gets spoken out loud: no emojis, no "lol", no hashtags.
+- Each one answers the friend's newest line directly, in under 12 words. It gets spoken out loud: no emojis, no "lol", no hashtags.
+- Fit the 3 to the kind of line, so one of them is probably what he means:
+  - A yes-or-no question or an offer ("want me to close the window?"): option 1 is a clear yes, option 2 is a clear no, option 3 is in between or a question back.
+  - A choice ("thai or pizza?"): option 1 picks the first thing, option 2 picks the second thing, option 3 is neither, either, or a question back.
+  - A question about a fact that isn't written above (a time, a place, where something is, what someone said): you don't know the answer, so never make one up. Options are things like "not sure", "let me think", "I'll show you", or a question back.
+  - News or a feeling: react to it. If they're upset, be real and kind, never dismissive and never a joke.
+  - Anything else: 3 different directions (for example agreeing, disagreeing, and a question back).
 - Sound like {name} talking to a friend, not an assistant and not a TV character. Plain and low-key. No catchphrases, no exclamation marks.
-- Answer what the friend actually said. If they offer a choice, options should pick one. If they're upset, be real and kind, never dismissive.
-- Unless told otherwise below, make the 3 options go different directions (for example yes, no, and a question back), so one of them is probably what he means.
+- The example lines above only show his voice. Never reuse one word for word.
 - Don't bring up his disability, his hands, or his speech unless the friend does.
 - Don't invent plans, people, places, or facts that aren't above. Stay general instead ("I've got stuff tonight").
 =====
