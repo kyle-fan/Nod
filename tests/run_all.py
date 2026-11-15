@@ -18,6 +18,6 @@ for test in sorted(here.glob("test_*.py")):
         failed = True
         if not any(line.startswith("FAIL") for line in lines):
             print(out.stderr[-1500:])
-print(f"{total} checks passed" if not failed else "SOME TESTS FAILED")
-print("ALL TESTS PASSED" if not failed else "")
+print(f"{total} checks passed")
+print("ALL TESTS PASSED" if not failed else "SOME TESTS FAILED")
 sys.exit(1 if failed else 0)

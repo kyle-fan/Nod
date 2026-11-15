@@ -51,7 +51,7 @@ async def fake_answer(prompt, schema, slot):
         return json.dumps({"replies": ["you around", "want food", "what's the plan tonight"]})
     if slot == "textreply":
         assert 'just texted you: "where are you' in user, user
-        n = len(re.findall(r"already passed on", user))
+        n = len(re.findall(r"none was right", user))
         return json.dumps({"replies": ["in my room", "why", "be there soon"] if not n
                            else ["at the dorm", "who's asking", "one minute"]})
     if slot == "message":

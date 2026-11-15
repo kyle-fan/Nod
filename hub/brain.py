@@ -307,8 +307,11 @@ async def suggest_text_replies(history: list[dict], who: str, text: str,
     spoken = [t for t in history if t["who"] in ("friend", "me")][-4:]
     prompt = _prompt("textreply.txt", name=p["name"], profile=_profile_text(p), style=_style_text(p),
                      history=_history_text(spoken, p["name"]), who=who, text=text.replace('"', "'"),
-                     avoid=("You already passed on these, so write different ones: "
-                            + "; ".join(avoid) + "\n") if avoid else "")
+                     # Listing the rejected answers makes Bonsai copy them back. Asking for new
+                     # angles works; anything that still repeats is filtered out below.
+                     avoid=("You already offered 3 answers and none was right. These 3 must take other "
+                            "angles: one sets a condition, one gives a reason, one makes a different "
+                            "suggestion.\n") if avoid else "")
     t0 = time.perf_counter()
     try:
         out = await _chat(prompt, max_tokens=120, schema=REPLY_SCHEMA, slot="textreply",
@@ -344,8 +347,9 @@ async def suggest_new_texts(history: list[dict], who: str,
     prompt = _prompt("textstart.txt", name=p["name"], profile=_profile_text(p), style=_style_text(p),
                      history=_history_text(history[-6:], p["name"]), who=who,
                      relation=f" ({relation})" if relation else "",
-                     avoid=("You already passed on these, so write different ones: "
-                            + "; ".join(avoid) + "\n") if avoid else "")
+                     avoid=("You already offered 3 messages and none was right. These 3 must be about "
+                            "other things: something from your day, a plan for later, a question about "
+                            "them.\n") if avoid else "")
     t0 = time.perf_counter()
     try:
         out = await _chat(prompt, max_tokens=120, schema=REPLY_SCHEMA, slot="textreply")
@@ -765,8 +769,9 @@ async def _draft_messages(p: dict, history: list[dict], app: str, field: str, go
                          for t in p.get("texts", [])) or "(none yet)",
                      history=_history_text(history, p["name"]), app=app, field=field,
                      goal=goal or "(see the conversation)",
-                     avoid=("He already passed on these wordings, so write different ones: "
-                            + "; ".join(avoid) + "\n") if avoid else "")
+                     avoid=("You already offered wordings and none was right. Say the same thing in "
+                            "3 new ways: one shorter, one with a few more words, one put as a question.\n")
+                     if avoid else "")
     out = await _chat(prompt, max_tokens=120, schema=REPLY_SCHEMA, slot="message")
     drafts = [str(r).strip() for r in _parse_json(out, "replies") if str(r).strip()]
     if "your answer to" not in field:     # passing something on: it is said to them, not about them
