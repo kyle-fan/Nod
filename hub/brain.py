@@ -464,8 +464,8 @@ async def suggest_actions(history: list[dict], screen: dict, done: list[str] | N
     t0 = time.perf_counter()
     acts, seen, ok = [], set(), True
     try:
-        if not choices:
-            raise ValueError("nothing on screen to act on")
+        if not choices:      # nothing on screen to act on: not Bonsai's fault
+            return [], 0, True, info
         all_apps = list(dict.fromkeys([app] + apps))
         out = await _chat(prompt, max_tokens=140, slot="actions",
                           schema=_action_schema(list(choices), all_apps, with_goal))
