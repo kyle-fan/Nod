@@ -50,9 +50,11 @@ Files: `Sidecar.swift` (entry point, server and routes), `Voice.swift` (TTSKit a
 browser tab titled "Blink"). `curl "localhost:8790/axdump?app=Messages"` prints an app's raw
 accessibility tree, for working out how a new app exposes its controls.
 
-Messages is read in a purpose-built way (`messagesScreen` in `Hands.swift`): one button per sidebar
-chat labeled with just the name, the message box as `Message <chat name>` with its `value`, and a
-synthetic `Send` that presses Return. Sidebar rows are opened with a real mouse click, because AXPress
+Messages is read in a purpose-built way (`messagesScreen` in `Hands.swift`) with the same two
+views as the hub's `FakeMac`. List view: one button per sidebar chat labeled with just the name, and
+no message box, so nothing can be typed to whoever happened to be open. Chat view (for 90 s after a
+name is pressed, until Send or Back): `Back to conversations`, the message box as
+`Message <chat name>` with its `value`, and a synthetic `Send` that presses Return. Sidebar rows are opened with a real mouse click, because AXPress
 on them multi-selects instead. `POST /restart` (dev only) relaunches a rebuilt binary while keeping
 the terminal's permissions.
 

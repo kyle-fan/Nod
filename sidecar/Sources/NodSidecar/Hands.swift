@@ -10,6 +10,8 @@ final class Hands: @unchecked Sendable {
     private var roles: [Int: String] = [:]
     private var sendFieldID: [Int: AXUIElement] = [:]   // synthetic "Send" ids -> the message field
     private var clickIDs: Set<Int> = []                  // ids that need a real mouse click, not AXPress
+    private var backID: Int?                             // synthetic "Back to conversations"
+    private var chatViewUntil = Date.distantPast         // Messages: show the open chat, not the list
     private var lastTarget: NSRunningApplication?        // last real app in front (never Blink itself)
     private let ignoredApps: Set<String>
     private static let browsers: Set<String> = [
@@ -39,9 +41,10 @@ final class Hands: @unchecked Sendable {
         if let bundle = app.bundleIdentifier, Hands.browsers.contains(bundle) {
             let appEl = AXUIElementCreateApplication(app.processIdentifier)
             AXUIElementSetMessagingTimeout(appEl, 0.5)
-            if let window = attr(appEl, kAXFocusedWindowAttribute),
-               let title = string(window as! AXUIElement, kAXTitleAttribute),
-               title.lowercased().contains("blink") { return true }
+            let window = attr(appEl, kAXFocusedWindowAttribute) ?? attr(appEl, kAXMainWindowAttribute)
+                ?? (attr(appEl, kAXWindowsAttribute) as? [AXUIElement])?.first
+            if let window, let title = string(window as! AXUIElement, kAXTitleAttribute),
+               title.lowercased().hasPrefix("blink") { return true }
         }
         return false
     }
@@ -256,7 +259,7 @@ final class Hands: @unchecked Sendable {
             sendMap[id] = field
             out.append(["id": id, "role": "button", "label": "Send"])
         }
-        lock.withLock { elements = map; roles = roleMap; sendFieldID = sendMap; clickIDs = [] }
+        lock.withLock { elements = map; roles = roleMap; sendFieldID = sendMap; clickIDs = []; backID = nil }
         return ["app": app.localizedName ?? "", "elements": out]
     }
 
@@ -281,42 +284,57 @@ final class Hands: @unchecked Sendable {
         var budget = 800
         guard let list = find(identifier: "ConversationList", in: win, budget: &budget) else { return nil }
         var budget2 = 1500
-        let field = find(identifier: "messageBodyField", in: win, budget: &budget2)
-        let chatName = string(win, kAXTitleAttribute)
+        var field = find(identifier: "messageBodyField", in: win, budget: &budget2)
+        // Right after a chat is opened Messages takes a moment to show its message box.
+        var waits = 0
+        while field == nil, waits < 6, lock.withLock({ Date() < chatViewUntil }) {
+            usleep(300_000)
+            waits += 1
+            var b = 1500
+            field = find(identifier: "messageBodyField", in: win, budget: &b)
+        }
 
+        let chatName = string(win, kAXTitleAttribute)
         var out: [[String: Any]] = []
         var map: [Int: AXUIElement] = [:]
         var roleMap: [Int: String] = [:]
         var sendMap: [Int: AXUIElement] = [:]
-        // AXPress on a sidebar row adds it to a multi-selection ("2 Conversations Selected")
-        // instead of opening it, so rows are opened with a real click.
         var clicks = Set<Int>()
-        var seen = Set<String>()
+        var back: Int?
         var id = 0
-        for row in children(list).prefix(60) where out.count < 12 {
-            guard let desc = string(row, kAXDescriptionAttribute) ?? string(row, kAXTitleAttribute) else { continue }
-            // "Andrew, come back, 10:50 PM" / "Andrew, Pinned" -> "Andrew"
-            let name = desc.components(separatedBy: ", ").first?.trimmingCharacters(in: .whitespaces) ?? ""
-            // The chat that is already open is not offered again: the next step there is typing.
-            guard !name.isEmpty, !seen.contains(name), field == nil || name != chatName else { continue }
-            seen.insert(name)
-            id += 1
-            map[id] = row
-            clicks.insert(id)
-            roleMap[id] = "button"
-            out.append(["id": id, "role": "button", "label": name])
-        }
-        if let field {
-            id += 1
-            map[id] = field
-            roleMap[id] = "textfield"
-            out.append(["id": id, "role": "textfield", "label": "Message \(chatName ?? "")".trimmingCharacters(in: .whitespaces),
+
+        // Two views, the same shapes as the hub's rehearsal Mac (hub/sidecar.py FakeMac):
+        //  - list view: one button per chat. No message box, so nothing can be typed to whoever
+        //    happened to be open; the first step is always "press <name>".
+        //  - chat view (for 90 s after a name is pressed): Back, "Message <name>", Send.
+        let inChat = field != nil && lock.withLock({ Date() < chatViewUntil })
+        if inChat, let field {
+            back = 1
+            out.append(["id": 1, "role": "button", "label": "Back to conversations"])
+            map[2] = field
+            roleMap[2] = "textfield"
+            out.append(["id": 2, "role": "textfield", "label": "Message \(chatName ?? "")".trimmingCharacters(in: .whitespaces),
                         "value": (attr(field, kAXValueAttribute) as? String) ?? ""])
-            id += 1
-            sendMap[id] = field
-            out.append(["id": id, "role": "button", "label": "Send"])
+            sendMap[3] = field
+            out.append(["id": 3, "role": "button", "label": "Send"])
+        } else {
+            var seen = Set<String>()
+            for row in children(list).prefix(60) where out.count < 12 {
+                guard let desc = string(row, kAXDescriptionAttribute) ?? string(row, kAXTitleAttribute) else { continue }
+                // "Andrew, come back, 10:50 PM" / "Andrew, Pinned" -> "Andrew"
+                let name = desc.components(separatedBy: ", ").first?.trimmingCharacters(in: .whitespaces) ?? ""
+                guard !name.isEmpty, !seen.contains(name) else { continue }
+                seen.insert(name)
+                id += 1
+                map[id] = row
+                // AXPress on a sidebar row adds it to a multi-selection ("2 Conversations Selected")
+                // instead of opening it, so rows are opened with a real click.
+                clicks.insert(id)
+                roleMap[id] = "button"
+                out.append(["id": id, "role": "button", "label": name])
+            }
         }
-        lock.withLock { elements = map; roles = roleMap; sendFieldID = sendMap; clickIDs = clicks }
+        lock.withLock { elements = map; roles = roleMap; sendFieldID = sendMap; clickIDs = clicks; backID = back }
         return ["app": "Messages", "elements": out]
     }
 
@@ -331,11 +349,23 @@ final class Hands: @unchecked Sendable {
         guard type == "press" || type == "type" else { return err("unknown type '\(type)'") }
         guard Hands.trusted else { return err(Hands.permissionError) }
         let id = (action["id"] as? Int) ?? Int(action["id"] as? String ?? "") ?? -1
-        if type == "press", let field = lock.withLock({ sendFieldID[id] }) { return await pressReturn(in: field) }
+        if type == "press", lock.withLock({ backID == id }) {
+            lock.withLock { chatViewUntil = .distantPast }
+            return ["ok": true]
+        }
+        if type == "press", let field = lock.withLock({ sendFieldID[id] }) {
+            let result = await pressReturn(in: field)
+            if result["ok"] as? Bool == true { lock.withLock { chatViewUntil = .distantPast } }
+            return result
+        }
         guard let el = lock.withLock({ elements[id] }) else {
             return err("unknown id \(id): call /screen first, ids only last until the next /screen")
         }
-        if type == "press", lock.withLock({ clickIDs.contains(id) }) { return await clickElement(el) }
+        if type == "press", lock.withLock({ clickIDs.contains(id) }) {
+            let result = await clickElement(el)
+            if result["ok"] as? Bool == true { lock.withLock { chatViewUntil = Date().addingTimeInterval(90) } }
+            return result
+        }
         if type == "press" { return press(el) }
         guard let text = action["text"] as? String else { return err("missing text") }
         return await typeText(text, into: el)
