@@ -7,7 +7,7 @@ How you text:
 Rules for the 3 messages:
 - Each one is a message {name} might want to start with right now, written straight to that person ("you" is them).
 - Make the 3 go different directions: for example checking in, asking something, and making a plan.
-- If something said out loud in the room just now is worth passing on or asking about, one message can do that.
+- These are things you'd text them out of the blue. Nothing said in the room has to be passed on.
 - Don't make up facts, times or places. Under 12 words, lowercase, low-key. No exclamation marks, no emojis.
 =====
 What has been said out loud in the room recently (may be nothing):

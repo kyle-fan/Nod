@@ -258,6 +258,18 @@ async def suggest_new_texts(history: list[dict], who: str,
     """3 messages he might want to send to someone, unprompted. Returns (messages, ms, ok)."""
     p = load_profile()
     relation = p.get("people", {}).get(who, "")
+    # The friend just asked him to tell or ask this person something: the messages are
+    # wordings of that request (the same prompt the step-by-step route uses).
+    asked = next((t["text"] for t in reversed(history[-3:]) if t["who"] == "friend"), "")
+    if who.lower() in asked.lower() and re.search(r"\b(tell|ask|text|let|remind|message)\b", asked.lower()):
+        t0 = time.perf_counter()
+        try:
+            drafts = await _draft_messages(p, [{"who": "friend", "text": asked}], "Messages",
+                                           f"Message {who}", f"text {who}: what the friend asked", avoid)
+            if drafts:
+                return (drafts + ["you around"] * 3)[:3], int((time.perf_counter() - t0) * 1000), True
+        except Exception as e:
+            print(f"[brain] Bonsai error: {e}")
     prompt = _prompt("textstart.txt", name=p["name"], profile=_profile_text(p), style=_style_text(p),
                      history=_history_text(history[-6:], p["name"]), who=who,
                      relation=f" ({relation})" if relation else "",
