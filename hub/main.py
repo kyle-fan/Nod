@@ -892,7 +892,13 @@ async def debug_json():
     det = getattr(app.state, "detector", None)
     out = {"now": time.time(), "mode": S.mode, "status": S.status, "camera": S.camera,
            "events": EVENTS[-40:], "bonsai_calls": list(brain.CALLS)[-25:],
-           "settings": settings_view(), "sidecar": None, "gestures": None}
+           "settings": settings_view(), "sidecar": None, "gestures": None,
+           "tiles": [t["label"] for t in S.tiles], "index": S.index,
+           "task": {"goal": (S.goal or {}).get("goal", ""), "done": S.done[-6:]},
+           # what the Mac helper last said was on screen: the first place to look when a tile is wrong
+           "screen": {"app": S.screen.get("app", ""), "error": S.screen.get("error", ""),
+                      "elements": [f'{e["role"]}: {e["label"]}' + (f' = "{e["value"]}"' if e.get("value") else "")
+                                   for e in S.screen.get("elements", [])[:30]]}}
     if det:
         out["gestures"] = {
             "reading": det.reading, "fps": round(det.fps, 1), "select_signal": face.SELECT_SIGNAL,

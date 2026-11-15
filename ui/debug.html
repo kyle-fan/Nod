@@ -38,6 +38,7 @@
   <section><h2>Face (what the camera reads, against each gesture's threshold)</h2><div id="face"></div></section>
   <section><h2>Ears (microphone)</h2><div id="ears"></div></section>
   <section><h2>Bonsai (most recent calls)</h2><div id="calls"></div></section>
+  <section><h2>Tiles and the screen the Mac helper last read</h2><div id="screen"></div></section>
   <section style="grid-column:1 / -1"><h2>What just happened</h2><div id="log"></div></section>
 </div>
 <script>
@@ -111,6 +112,12 @@ async function tick() {
           + `<p class="muted">Sound now ${e.level_db.toFixed(0)} dB, room ${e.noise_floor_db.toFixed(0)} dB, speech counts above ${e.speech_needs_db.toFixed(0)} dB (red line).
              ${e.mic_restarts ? "Microphone restarted " + e.mic_restarts + " time(s)." : ""}</p>` : '<p class="muted">Ears are off.</p>');
   }
+
+  const scr = d.screen || {elements: []};
+  $("screen").innerHTML = (d.tiles.length ? "<p>" + d.tiles.map((t, i) => pill(i === d.index ? "ok" : "", t)).join("") + "</p>" : '<p class="muted">No tiles on screen.</p>')
+    + (d.task.goal ? `<p>Goal: <b>${esc(d.task.goal)}</b>${d.task.done.length ? '<br><span class="muted">Done: ' + esc(d.task.done.join(" → ")) + "</span>" : ""}</p>` : "")
+    + (scr.error ? pill("bad", scr.error) : scr.app ? `<p class="muted">${esc(scr.app)}: ${scr.elements.length} things it can press or type into</p><table>`
+        + scr.elements.map(e => `<tr><td style="width:auto">${esc(e)}</td></tr>`).join("") + "</table>" : '<p class="muted">The screen has not been read yet.</p>');
 
   $("calls").innerHTML = d.bonsai_calls.length ? "<table>" + d.bonsai_calls.slice().reverse().slice(0, 12).map(c =>
       `<tr><td>${ago(d.now, c.at)}</td><td class="kind">${esc(c.kind)}</td><td>${c.s.toFixed(2)} s</td></tr>`).join("") + "</table>"
