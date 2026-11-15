@@ -302,7 +302,7 @@ final class Ears: @unchecked Sendable {
             let t0 = Date()
             let results = try await model.transcribe(audioArray: audio, decodeOptions: options)
             if debug { print(String(format: "[sidecar] \(model === whisper ? "final" : "fast") transcribe %.2fs audio in %.2fs", Double(audio.count) / Ears.sampleRate, Date().timeIntervalSince(t0))) }
-            return Ears.clean(results.map(\.text).joined(separator: " "))
+            return NameBook.shared.correct(Ears.clean(results.map(\.text).joined(separator: " ")))
         } catch {
             print("[sidecar] transcribe failed: \(error)")
             return ""

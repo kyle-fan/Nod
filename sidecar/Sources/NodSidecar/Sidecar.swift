@@ -44,6 +44,20 @@ func profileVoice() -> String? {
     return nil
 }
 
+/// People the character knows (hub/profile.json "people"). Read-only.
+func profilePeople() -> [String] {
+    let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let candidates = [env["NOD_PROFILE"].map { URL(fileURLWithPath: $0) },
+                      cwd.appending(path: "../hub/profile.json"),
+                      cwd.appending(path: "hub/profile.json")].compactMap { $0 }
+    for url in candidates {
+        if let data = try? Data(contentsOf: url),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let people = obj["people"] as? [String: Any] { return Array(people.keys) }
+    }
+    return []
+}
+
 /// Loads the models, then serves HTTP until the process is killed. Runs off the main thread.
 func runSidecar() async throws {
     // MARK: Voice (loaded once)
@@ -111,6 +125,21 @@ func runSidecar() async throws {
 
     let hands = Hands(env: env)
     Task { await hands.watchFrontmost() }
+    // Known names, so misheard ones ("Kayden Ron") are corrected to the real contact.
+    NameBook.shared.setProfileNames(profilePeople())
+    Task {
+        while !Task.isCancelled {
+            let names = hands.messagesContactNames()
+            if !names.isEmpty { NameBook.shared.setContacts(names) }
+            try? await Task.sleep(nanoseconds: 20_000_000_000)
+        }
+    }
+
+    // Debug: what a transcript would be corrected to, e.g. /names?text=tell%20Kayden%20Ron
+    await server.appendRoute("GET /names") { request in
+        let text = (request.query.first(where: { $0.name == "text" })?.value ?? "").replacingOccurrences(of: "+", with: " ")
+        return json(["known": NameBook.shared.count, "corrected": NameBook.shared.correct(text)])
+    }
     if !Hands.trusted { log("WARNING: " + Hands.permissionError) }
 
     await server.appendRoute("GET /screen") { request in

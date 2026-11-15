@@ -50,6 +50,12 @@ Files: `Sidecar.swift` (entry point, server and routes), `Voice.swift` (TTSKit a
 browser tab titled "Blink"). `curl "localhost:8790/axdump?app=Messages"` prints an app's raw
 accessibility tree, for working out how a new app exposes its controls.
 
+Name correction (`Names.swift`): transcripts are checked against real names (the `people` in
+`hub/profile.json` plus the chats in the Messages sidebar, refreshed every 20 s). A capitalised word
+or pair that sounds like a known name but is spelled differently is replaced with the real one
+("Kayden Ron" becomes "Caden Ruan"), so Bonsai looks for a contact that exists.
+`curl -G localhost:8790/names --data-urlencode "text=tell Kayden Ron hi"` shows what a line becomes.
+
 Messages is read in a purpose-built way (`messagesScreen` in `Hands.swift`) with the same two
 views as the hub's `FakeMac`. List view: one button per sidebar chat labeled with just the name, and
 no message box, so nothing can be typed to whoever happened to be open. Chat view (for 90 s after a

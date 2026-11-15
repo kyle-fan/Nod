@@ -348,6 +348,22 @@ final class Hands: @unchecked Sendable {
         return ["app": "Messages", "elements": out]
     }
 
+    /// Names of the chats in the Messages sidebar (if Messages is running), for name correction.
+    func messagesContactNames() -> [String] {
+        guard Hands.trusted, let app = NSWorkspace.shared.runningApplications.first(where: {
+            $0.bundleIdentifier == "com.apple.MobileSMS" }) else { return [] }
+        let appEl = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(appEl, 1.0)
+        guard let win = (attr(appEl, kAXMainWindowAttribute) as! AXUIElement?)
+            ?? (attr(appEl, kAXWindowsAttribute) as? [AXUIElement])?.first else { return [] }
+        var budget = 800
+        guard let list = find(identifier: "ConversationList", in: win, budget: &budget) else { return [] }
+        return children(list).prefix(60).compactMap { row in
+            (string(row, kAXDescriptionAttribute) ?? string(row, kAXTitleAttribute))?
+                .components(separatedBy: ", ").first?.trimmingCharacters(in: .whitespaces)
+        }
+    }
+
     // MARK: /act
 
     func act(_ action: [String: Any]) async -> [String: Any] {
