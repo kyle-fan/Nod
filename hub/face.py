@@ -7,6 +7,7 @@ Watch numbers live:      python -m hub.face --debug
 If tilting right prints "left", set FLIP_ROLL = True. Same for nod with FLIP_PITCH.
 """
 import math
+import os
 import sys
 import threading
 import time
@@ -271,7 +272,53 @@ def measure(camera_index: int = 0):
             print(f"WARNING: head dipped {dip:.1f} deg during '{k}', past NOD_DEG. Nod may misfire.")
 
 
+def record(path: str, seconds: float = 40, camera_index: int = 0):
+    """Save raw face readings to a file, to look at later or replay through the rules:
+    python -m hub.face --record trace.json   (then do some nods, tilts, smiles)."""
+    import json
+    rows, t0 = [], None
+    print(f"Recording {seconds:.0f} s. Sit neutral for 2 s, then do your gestures...")
+    for reading in signals(camera_index, misses=True):
+        now = time.time()
+        t0 = t0 or now
+        if now - t0 > seconds:
+            break
+        rows.append(None if reading is None else [round(reading[0] - t0, 3)] + [round(v, 4) for v in reading[1:]])
+    Path(path).write_text(json.dumps({"flip_pitch": FLIP_PITCH, "flip_roll": FLIP_ROLL, "rows": rows}))
+    faces = sum(1 for r in rows if r)
+    print(f"Saved {len(rows)} frames ({faces} with a face) to {path}")
+
+
+def replay(path: str):
+    """Run a recording through the current rules and the classic ones, and list what each fires."""
+    import json
+    from .gestures import ClassicLogic, GestureLogic
+    data = json.loads(Path(path).read_text())
+    det = GestureDetector(on_event=lambda e: None)
+    for name, logic in (("current rules", GestureLogic(det.tuning())), ("classic rules", ClassicLogic(det.tuning()))):
+        events = []
+        for row in data["rows"]:
+            if not row:
+                continue
+            t, pitch, roll, brow, jaw, smile, _blink = row
+            if data.get("flip_roll", FLIP_ROLL):
+                roll = -roll
+            if data.get("flip_pitch", FLIP_PITCH):
+                pitch = -pitch
+            for e in logic.feed(t, pitch, roll, brow if SELECT_SIGNAL == "brow" else smile, jaw):
+                events.append(f"{t:5.1f}s {e}")
+        print(f"{name}: {len(events)} events")
+        for e in events:
+            print("   ", e)
+
+
 if __name__ == "__main__":
+    if "--record" in sys.argv:
+        record(sys.argv[sys.argv.index("--record") + 1], camera_index=int(os.getenv("CAMERA_INDEX", "0")))
+        sys.exit()
+    if "--replay" in sys.argv:
+        replay(sys.argv[sys.argv.index("--replay") + 1])
+        sys.exit()
     if "--measure" in sys.argv:
         try:
             measure()
