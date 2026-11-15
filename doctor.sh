@@ -70,6 +70,7 @@ if [ -n "$HB" ]; then
 else bad "hub is not running on :8000 (./start.sh)"; fi
 
 echo
+echo "Live readings (gestures, microphone, timings): http://127.0.0.1:8000/debug"
 if [ $FAIL -gt 0 ]; then echo "$FAIL thing(s) need fixing, $WARN to check."; exit 1
 elif [ $WARN -gt 0 ]; then echo "Working, with $WARN thing(s) worth a look."
 else echo "Everything looks ready."; fi

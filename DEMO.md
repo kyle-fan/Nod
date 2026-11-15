@@ -5,8 +5,8 @@ Two versions: a 2-minute video and a 4 to 5 minute live demo. Both use the same 
 ## Before you start
 
 ```bash
-NOD_OVERLAY=1 USE_CAMERA=1 NOD_WATCH_MESSAGES=1 ./start.sh     # from Terminal
-./doctor.sh                                                     # everything should say OK
+NOD_OVERLAY=1 USE_CAMERA=1 ./start.sh     # from Terminal
+./doctor.sh                               # everything should say OK, including "Andrew has a chat"
 ```
 
 - Sit neutral while it starts. If gestures drift later: `curl -X POST localhost:8000/recalibrate`.
@@ -27,13 +27,17 @@ Keep the Chrome tab (http://127.0.0.1:8000) open on a second desktop: the keyboa
 | 2 | Friend: "Hey, want to watch the Yankees tonight?" Captions appear. Nod, tilt, smile. The Mac speaks. | "Theo can't speak clearly or use his hands. Blink hears his friend, Bonsai 2 suggests what he might say, and he picks with his face." | 25 s |
 | 3 | Friend: "Thai or pizza?" Nod, pick "More...", narrow down, pick. | "If none of the three fit, it asks him one question and narrows it down." | 20 s |
 | 4 | Friend: "The game's about to start, can you tell Andrew to come back?" Nod, smile: "yeah one sec". Tiles: Andrew, a wording, Send, Yes. Text appears in Messages. | "Now the friend asks him to do something. Bonsai reads what's on the screen and offers the next step. Five small movements and the text is sent. Nothing sends without a yes." | 35 s |
-| 5 | A text arrives from Andrew ("where are you"). Overlay: "Andrew texted you. Nod to answer." Nod, pick, Yes. | "When someone texts him, one nod answers it." | 20 s |
+| 5 | A text arrives from Andrew ("where are you"): type `/text Andrew: where are you` in the Chrome tab's dev box (see the note below). Overlay: "Andrew texted you. Nod to answer." Nod, pick, Yes. | "When someone texts him, one nod answers it." | 20 s |
 | 6 | Open mouth: menu. Quick phrases: "I need help". | "And some things shouldn't wait for a model." | 10 s |
 | 7 | Show the Wi-Fi icon still off, and the doctor or the test run. | "Bonsai 2 for prediction, Argmax for hearing and speaking, the Mac's accessibility API for hands. All local." | 10 s |
 
 Optional beat, after 4: friend says "can you put the Yankees game on". Nod, "sure thing", Open Safari, the Yankees link, Play, then Done (it comes up first once the game is playing). Not yet run on the real Mac, so rehearse it before relying on it.
 
 For the 2-minute video, cut beat 3 or 6.
+
+Beat 5 with a real incoming text: start with `NOD_WATCH_MESSAGES=1` and have someone text you. That watcher has not run on a real Mac yet, so try it before the demo; if it doesn't fire, the dev-box line above shows the same flow, and the answer is still really sent through Messages.
+
+http://127.0.0.1:8000/debug shows the live gesture readings against their thresholds. Keep it on a second screen while rehearsing.
 
 ## If something goes wrong on stage
 

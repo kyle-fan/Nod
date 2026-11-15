@@ -158,6 +158,7 @@
                  border-radius:12px; padding:10px 12px; font-size:15px; }
   footer button { background:rgba(255,255,255,.09); color:var(--text); border:1px solid var(--glass-edge);
                   border-radius:12px; padding:10px 14px; cursor:pointer; }
+  footer a.opt { color:#8fd3ff; text-decoration:none; }
   footer .opt { font-size:13px; color:var(--dim); white-space:nowrap; display:flex; align-items:center; gap:5px; cursor:pointer; }
   .hidden { display:none !important; }
 
@@ -214,6 +215,7 @@
   <input id="say" placeholder="Dev: type what the friend said, press Enter. Or: /text Andrew: where are you   (keys: N nod · 1-5 pick a tile · ← → move · Space pick · Esc back · C recalibrate camera · D hide this bar)">
   <label class="opt" title="Texting someone in the profile takes 3 picks instead of 5"><input type="checkbox" id="optExpress"> Express texts</label>
   <label class="opt" title="Remember the replies he picks and use them as examples of his voice"><input type="checkbox" id="optLearn"> Learn replies</label>
+  <a class="opt" href="/debug" target="_blank" title="Live gesture readings, microphone level, timings and a log">Under the hood</a>
   <button id="reset">Reset</button>
   <button id="hide">Hide (D)</button>
 </footer>
