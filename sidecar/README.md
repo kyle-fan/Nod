@@ -70,26 +70,30 @@ the terminal's permissions.
 
 ## What it does
 
-1. **Ears (WhisperKit):** stream the mic, and `POST http://127.0.0.1:8000/heard` with partial (`final: false`) and finished (`final: true`) sentences.
-2. **Voice (TTSKit):** `POST /speak {text}` speaks with the character's voice and only returns after playback ends.
-3. **Mute rule:** while speaking, plus 400 ms after, do not send anything to `/heard`.
-4. **Screen (accessibility API):** `GET /screen` lists pressable / typeable elements of the frontmost app.
-5. **Hands (accessibility API):** `POST /act` does `press`, `type`, or `open_app`.
+1. **Ears (WhisperKit).** Listens to the microphone and posts what the friend says to `POST http://127.0.0.1:8000/heard`: live partials (`final: false`) from a small model, one final per sentence from a large one. Names and teams from the profile are given to Whisper as hints, and misheard names are corrected to real contacts.
+2. **Voice (TTSKit).** `POST /speak {text}` speaks in the character's voice and returns only after playback ends. Speech starts about half a second after the request.
+3. **Mute rule.** While speaking, plus 400 ms after, nothing is sent to `/heard`, so the Mac never hears itself.
+4. **Screen (Accessibility API).** `GET /screen` lists what can be pressed or typed into in the app the user is working in, never Blink's own window. Messages has a purpose-built reading; web pages list their own links before browser toolbar buttons.
+5. **Hands (Accessibility API).** `POST /act` does `press`, `type` (never presses Enter) and `open_app`.
+6. **Overlay.** With `NOD_OVERLAY=1`, a transparent, click-through, always-on-top window shows the hub's tiles over whatever app is in front.
+7. **Incoming texts.** With `NOD_WATCH_MESSAGES=1`, a new text in Messages is reported to `POST http://127.0.0.1:8000/incoming`.
 
-## Build order (stop at each check)
+The exact JSON is in `../SPEC.md`. The sidecar never makes a network call except to the hub on localhost.
 
-1. Run Argmax's CLI demos once (`argmax-cli` / `whisperkit-cli` transcribe and `tts --play`). **Check:** both work offline.
-2. Swift package with `ArgmaxOSS` (or the Pro SDK, using the key from the organizer) plus a tiny HTTP server. Hummingbird or Swifter are fine; pick whichever builds first.
-3. `/speak` with TTSKit. Try voice cloning from a short sample; if it is not exposed, use the 1.7B model with a style instruction from `hub/profile.json` ("voice"). **Check:** `curl -X POST localhost:8790/speak -d '{"text":"hello"}' -H 'content-type: application/json'` talks.
-4. Mic streaming with WhisperKit to `/heard`, with the mute rule. **Check:** the hub UI shows what you say. This finishes Talk mode (Gate 1).
-5. `/screen` and `/act` with `AXUIElementCreateApplication(frontmostApp.pid)`, walking children for roles AXButton, AXTextField, AXTextArea, AXLink, AXMenuItem. Label = AXTitle, else AXDescription, else AXPlaceholderValue. Keep an id -> AXUIElement map until the next `/screen`. `press` = `AXUIElementPerformAction(el, kAXPressAction)`. `type` = set focused, then set `kAXValueAttribute` (fallback: CGEvent keystrokes). `open_app` = `NSWorkspace.shared.launchApplication`.
-   The terminal running the sidecar needs Accessibility permission (System Settings > Privacy & Security > Accessibility).
+## Checking it
 
-## Prompt to start a coding session
+```bash
+../test.sh --all        # runs this sidecar on a recording with speech silenced, next to a stand-in hub
+../doctor.sh            # with everything running: permissions, microphone, Messages, overlay
+curl -s localhost:8790/status
+curl -s localhost:8790/ears        # is sound arriving, and how loud
+```
 
-> Read ../SPEC.md and sidecar/README.md. Build the Swift sidecar in this folder, one step at a time, in the build order listed. After each step, give me the exact command to test it and stop. Use Argmax's open-source Swift SDK for speech. No cloud calls.
+What has been checked on the real Mac: speech in and out, the mute rule with real speakers and microphone, reading Messages, opening a chat, typing and sending. What has only been checked on recordings or not at all is listed in `../OVERNIGHT.md`.
 
-## Tips
+## Fitting a new app
 
-- Electron apps like Discord and Slack sometimes expose a thin accessibility tree. If Discord's is empty, test Messages first; it is native and exposes everything.
-- Print the `/screen` JSON for each app you plan to demo before the hub uses it.
+- `curl "localhost:8790/axdump?app=Notes"` prints the app's raw accessibility tree: roles, labels, identifiers, actions. Start there.
+- Native Apple apps expose everything. Electron apps (Discord, Slack) often expose very little; `AXManualAccessibility` is already requested, but don't count on it.
+- If `AXPress` does the wrong thing (in Messages it multi-selects a chat row), mark the element for a real click instead: see `clickIDs` in `Hands.swift`.
+- Keep `/screen` short and plainly labeled. Bonsai chooses better from 12 clear things than from 40 cryptic ones; the hub also shortlists long screens.
