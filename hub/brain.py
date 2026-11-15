@@ -650,8 +650,39 @@ async def draft_actions(history: list[dict], screen: dict, field_id, goal: str,
     spoken = list(history)
     while spoken and spoken[-1]["who"] == "me":
         spoken.pop()
+    # Bonsai's own summary of the goal ("text Sam: he's still coming") tends to leak into the
+    # wording in the third person. Give the message prompt only who it is for; what to say
+    # comes from the friend's actual words in the conversation.
+    who = _goal_person(goal)
+    if who and not goal.lower().startswith(("reply", "answer")):
+        goal = f"text {who} what the friend just asked you to pass on or ask"
     drafts = await _draft_messages(p, spoken or history, screen.get("app", ""), field["label"], goal, avoid)
     return [{"type": "type", "id": field["id"], "text": d, "label": d} for d in drafts]
+
+
+_OBJECT_VERBS = ("call", "tell", "text", "see", "meet", "get", "give", "ask", "for", "with", "to", "about",
+                 "miss", "love", "need", "help", "wait for", "pick up", "remind", "show", "let", "want")
+
+
+def _second_person(text: str) -> str:
+    """A message is read by the person it is about, so "i'll call her tonight" must be
+    "i'll call you tonight". Bonsai mostly gets this right; this fixes the times it doesn't."""
+    t = text
+    subs = [
+        (r"\b(is|was) (he|she)\b", lambda m: ("are" if m.group(1).lower() == "is" else "were") + " you"),
+        (r"\b(does|did|has|can|will|would|could|should) (he|she)\b", lambda m: {"does": "do", "has": "have"}.get(m.group(1).lower(), m.group(1)) + " you"),
+        (r"\b(he|she)'s\b", "you're"), (r"\b(he|she) is\b", "you are"), (r"\b(he|she) was\b", "you were"),
+        (r"\b(he|she) has\b", "you have"), (r"\b(he|she) does\b", "you do"), (r"\b(he|she) goes\b", "you go"),
+        (r"\b(he|she)'ll\b", "you'll"), (r"\b(he|she)'d\b", "you'd"),
+        (r"\b(he|she) (\w{3,})s\b", lambda m: "you " + m.group(2)),          # he wants -> you want
+        (r"\b(he|she)\b", "you"),
+        (rf"\b({'|'.join(_OBJECT_VERBS)}) (him|her)\b(?! \w+ing\b)", lambda m: m.group(1) + " you"),
+        (r"\bhim\b", "you"), (r"\bhers\b", "yours"),
+        (r"\b(his|her)\b", "your"),
+    ]
+    for pattern, repl in subs:
+        t = re.sub(pattern, repl, t, flags=re.I)
+    return t
 
 
 async def _draft_messages(p: dict, history: list[dict], app: str, field: str, goal: str,
@@ -666,5 +697,8 @@ async def _draft_messages(p: dict, history: list[dict], app: str, field: str, go
                             + "; ".join(avoid) + "\n") if avoid else "")
     out = await _chat(prompt, max_tokens=120, schema=REPLY_SCHEMA, slot="message")
     drafts = [str(r).strip() for r in _parse_json(out, "replies") if str(r).strip()]
+    if "your answer to" not in field:     # passing something on: it is said to them, not about them
+        drafts = [_second_person(d) for d in drafts
+                  if not re.match(r"^(ask|tell|text|remind|let)\b", d.strip(), flags=re.I)] or drafts
     low = {a.lower() for a in avoid or []}
     return [d for d in dict.fromkeys(drafts) if d.lower() not in low][:3]

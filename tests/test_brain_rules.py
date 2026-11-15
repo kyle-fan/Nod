@@ -53,6 +53,22 @@ def test_same_person():
     assert not s("Andrew", "Sam") and not s("", "Sam") and not s("Sam", "Sammy")
 
 
+def test_messages_are_written_to_the_person_not_about_them():
+    f = brain._second_person
+    assert f("i'll call her tonight") == "i'll call you tonight"
+    assert f("what time he's getting back") == "what time you're getting back"
+    assert f("when is he coming back") == "when are you coming back"
+    assert f("is she still coming tonight") == "are you still coming tonight"
+    assert f("does he want pizza") == "do you want pizza"
+    assert f("he wants pizza") == "you want pizza"
+    assert f("tell him the food is here") == "tell you the food is here"   # such drafts are dropped anyway
+    assert f("bring her charger") == "bring your charger"
+    assert f("waiting for him") == "waiting for you"
+    assert f("game's starting, come back") == "game's starting, come back"
+    assert f("do you want pizza") == "do you want pizza"
+    assert f("the weather is nice") == "the weather is nice"
+
+
 def test_finished_rules():
     assert brain._looks_finished("put the yankees game on", ['Pressed "Yankees vs Red Sox"', 'Pressed "Play"'])
     assert not brain._looks_finished("put the yankees game on", ['Pressed "Yankees vs Red Sox"'])
