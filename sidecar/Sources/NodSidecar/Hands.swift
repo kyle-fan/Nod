@@ -417,7 +417,8 @@ final class Hands: @unchecked Sendable {
             for row in children(list).prefix(40) {
                 guard let desc = string(row, kAXDescriptionAttribute) else { continue }
                 let parts = desc.components(separatedBy: ", ")
-                guard parts.count >= 4, let flag = parts.firstIndex(of: "Unread"), flag >= 1 else { continue }
+                guard parts.count >= 4, let flag = parts.firstIndex(of: "Unread"), flag >= 1,
+                      flag + 1 < parts.count - 1 else { continue }
                 let preview = parts[(flag + 1)..<(parts.count - 1)].joined(separator: ", ")
                 if !preview.isEmpty { out.append((parts[0].trimmingCharacters(in: .whitespaces), preview)) }
             }
