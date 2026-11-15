@@ -7,6 +7,8 @@ Then open http://127.0.0.1:8000
 import asyncio
 import time
 
+import httpx
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -443,7 +445,8 @@ async def ask_to_confirm(action):
               mode="computer", status=confirm_question(action))
     S.index = 1   # highlight "No": a stray smile must never send something
     await broadcast()
-    await speak(S.status)
+    # Say the question out loud, but don't make him wait for the end of it to answer.
+    asyncio.create_task(speak(S.status))
 
 
 def describe(action):
@@ -590,6 +593,21 @@ async def pick(tile):
         go_listen()
 
 
+async def on_pick(index):
+    """A tile was clicked or chosen with a number key (helper, caregiver, or rehearsal)."""
+    if lock.locked() or S.mode not in ("choose", "computer") or not 0 <= index < len(S.tiles):
+        return
+    async with lock:
+        S.index, S.last_input = index, time.time()
+        try:
+            await pick(S.tiles[index])
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            go_listen(status="Something went wrong. Nod to try again")
+    await broadcast()
+
+
 async def on_gesture(gesture):
     if lock.locked():
         return   # busy (thinking/speaking): drop the gesture instead of queueing it
@@ -673,6 +691,8 @@ async def ws_endpoint(ws: WebSocket):
                 asyncio.create_task(on_gesture(msg["name"]))
             elif msg.get("type") == "heard":   # dev box: type what the friend said
                 await heard(Heard(text=msg.get("text", ""), final=True))
+            elif msg.get("type") == "pick":
+                asyncio.create_task(on_pick(int(msg.get("index", -1))))
             elif msg.get("type") == "incoming":   # dev box: "/text Andrew: where are you"
                 await incoming({"from": msg.get("from", ""), "text": msg.get("text", "")})
             elif msg.get("type") == "recalibrate":
@@ -685,6 +705,25 @@ async def ws_endpoint(ws: WebSocket):
                 await broadcast()
     except WebSocketDisconnect:
         clients.discard(ws)
+
+
+@app.get("/status")
+async def status():
+    """One look at whether everything is alive (used by ./doctor.sh)."""
+    out = {"hub": True, "mode": S.mode, "camera": S.camera, "mock_sidecar": config.MOCK_SIDECAR,
+           "bonsai": False, "sidecar": False}
+    try:
+        async with httpx.AsyncClient(timeout=2) as c:
+            out["bonsai"] = (await c.get(config.BONSAI_URL.split("/v1/")[0] + "/health")).status_code == 200
+    except Exception:
+        pass
+    if not config.MOCK_SIDECAR:
+        try:
+            async with httpx.AsyncClient(timeout=2) as c:
+                out["sidecar"] = (await c.get(config.SIDECAR_URL + "/health")).json().get("ok", False)
+        except Exception:
+            pass
+    return out
 
 
 @app.get("/")

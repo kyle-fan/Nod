@@ -318,6 +318,36 @@ async def test_screen_that_cannot_be_read_says_why():
         sidecar.screen = old
 
 
+async def test_click_or_number_key_picks_a_tile():
+    await fresh()
+    await friend("want to grab food")
+    await g("nod")
+    await main.on_pick(2)
+    assert SPOKEN == ["nah"] and S.mode == "listen"
+    await main.on_pick(0)                               # nothing on screen: ignored
+    assert S.mode == "listen"
+
+
+async def test_confirmation_can_be_answered_while_it_is_spoken():
+    await fresh()
+    gate = asyncio.Event()
+
+    async def slow(text):
+        SPOKEN.append(text)
+        if text.startswith("Send"):
+            await gate.wait()                           # still talking
+    old, sidecar.speak = sidecar.speak, slow
+    try:
+        await friend("can you tell Andrew to come back")
+        await g("nod", "select", "select", "select", "select")
+        assert labels() == ["Yes, do it", "No"]
+        await g("left", "select")                       # answered before the question finished
+        assert sidecar.FAKE.sent == [("Andrew", "come back")]
+    finally:
+        gate.set()
+        sidecar.speak = old
+
+
 async def test_quick_phrases_need_no_model():
     await fresh()
     CALLS.clear()

@@ -228,6 +228,21 @@ func runSidecar() async throws {
         }
     }
 
+    // One look at the helper's health (used by ../doctor.sh).
+    await server.appendRoute("GET /status") { _ in
+        var out: [String: Any] = [
+            "ok": true,
+            "accessibility": Hands.trusted,
+            "silent": await voice.isSilent,
+            "overlay": await MainActor.run { overlayWindow != nil },
+            "watch_messages": env["NOD_WATCH_MESSAGES"] == "1",
+            "known_names": NameBook.shared.count,
+            "tts_model": ttsModel.rawValue,
+        ]
+        if let ears = earsRef { out["ears"] = ears.status } else { out["ears"] = "off" }
+        return json(out)
+    }
+
     // Debug: what a transcript would be corrected to, e.g. /names?text=tell%20Kayden%20Ron
     await server.appendRoute("GET /names") { request in
         let text = (request.query.first(where: { $0.name == "text" })?.value ?? "").replacingOccurrences(of: "+", with: " ")

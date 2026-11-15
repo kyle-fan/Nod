@@ -8,6 +8,9 @@
 #   BONSAI_MODEL=9B            Bonsai 2 size
 #   USE_CAMERA=1               0 = keyboard only (no webcam gestures)
 #   NOD_OVERLAY=1              float the tiles over the screen instead of using a browser tab
+#   NOD_WATCH_MESSAGES=1       tell the hub when a text message arrives, so a nod can answer it
+#   CAMERA_INDEX=1             use the second camera (when an iPhone grabs the first slot)
+#   NOD_SILENT=1               rehearsal: speech is generated but not played
 set -u
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 RUN=/tmp/nod
@@ -63,4 +66,4 @@ else
 fi
 
 echo
-echo "Nod is up. Open http://127.0.0.1:8000   (logs: $RUN, stop: ./stop.sh)"
+echo "Nod is up. Open http://127.0.0.1:8000   (logs: $RUN, stop: ./stop.sh, check: ./doctor.sh)"
