@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from hub import brain, config, main, sidecar   # noqa: E402
 
 CALLS = []
+LAST_MESSAGE_PROMPT = []
 
 
 async def fake_chat(prompt, max_tokens=220, schema=None, slot=None, on_text=None):
@@ -54,6 +55,7 @@ async def fake_answer(prompt, schema, slot):
         return json.dumps({"replies": ["in my room", "why", "be there soon"] if not n
                            else ["at the dorm", "who's asking", "one minute"]})
     if slot == "message":
+        LAST_MESSAGE_PROMPT.append(user)
         return json.dumps({"replies": ["come back", "you coming", "game's starting"]})
     if slot == "actions":
         lines = {m.group(1): m.group(2) for m in re.finditer(r"^((?:press|type) \d+|open \w+) = (.*)$", user, re.M)}
@@ -488,6 +490,17 @@ async def test_settings_can_be_switched_while_running():
         assert S.status == "Text Andrew"
     finally:
         await main.set_settings({"express": False, "learn": True})
+
+
+async def test_passing_something_on_ignores_the_other_persons_last_text():
+    """Andrew's last text is unanswered, but the friend asked to tell him something else:
+    the message prompt must be about the friend's request, not about answering that text."""
+    await fresh()
+    sidecar.FAKE.received["Andrew"] = "what's for dinner"
+    await friend("can you tell Andrew to come back")
+    await g("nod", "select", "select")
+    assert "who asked you" not in LAST_MESSAGE_PROMPT[-1], LAST_MESSAGE_PROMPT[-1]
+    assert 'labeled "Message Andrew"' in LAST_MESSAGE_PROMPT[-1]
 
 
 async def test_quick_phrases_need_no_model():

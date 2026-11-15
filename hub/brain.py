@@ -654,9 +654,14 @@ async def draft_actions(history: list[dict], screen: dict, field_id, goal: str,
     # wording in the third person. Give the message prompt only who it is for; what to say
     # comes from the friend's actual words in the conversation.
     who = _goal_person(goal)
-    if who and not goal.lower().startswith(("reply", "answer")):
-        goal = f"text {who} what the friend just asked you to pass on or ask"
-    drafts = await _draft_messages(p, spoken or history, screen.get("app", ""), field["label"], goal, avoid)
+    label = field["label"]
+    if not goal.lower().startswith(("reply", "answer", "respond")):
+        # Passing something on. The box may mention the other person's last text (most chats
+        # end with one); that is only relevant when the task is to answer it.
+        label = label.split(": your answer to")[0]
+        if who:
+            goal = f"text {who} what the friend just asked you to pass on or ask"
+    drafts = await _draft_messages(p, spoken or history, screen.get("app", ""), label, goal, avoid)
     return [{"type": "type", "id": field["id"], "text": d, "label": d} for d in drafts]
 
 
