@@ -200,16 +200,17 @@ final class Hands: @unchecked Sendable {
             roots.append(w)
         }
 
-        struct Found { let el: AXUIElement; let role: String; let label: String }
+        struct Found { let el: AXUIElement; let role: String; let label: String; let web: Bool }
         var found: [Found] = []
         var seen = Set<String>()
         var visited = 0
         let deadline = Date().addingTimeInterval(timeBudget)
 
-        func walk(_ el: AXUIElement, depth: Int) {
+        func walk(_ el: AXUIElement, depth: Int, inWeb: Bool = false) {
             guard depth <= maxDepth, visited < maxVisited, found.count < maxElements * 3, Date() < deadline else { return }
             visited += 1
             let axRole = string(el, kAXRoleAttribute) ?? ""
+            let inWeb = inWeb || axRole == "AXWebArea"   // inside a web page (Safari, Chrome, web views)
             var matched = false
             if let role = mapRole(el, axRole: axRole) {
                 let enabled = (attr(el, kAXEnabledAttribute) as? Bool) ?? true
@@ -217,20 +218,30 @@ final class Hands: @unchecked Sendable {
                     let key = role + "|" + text
                     if !seen.contains(key) {
                         seen.insert(key)
-                        found.append(Found(el: el, role: role, label: text))
+                        found.append(Found(el: el, role: role, label: text, web: inWeb))
                     }
                     matched = true
                 }
             }
             // Don't descend into a matched leaf control (a button's inner label/image).
             if matched, axRole != "AXGroup", axRole != "AXCell", axRole != "AXRow" { return }
-            for child in children(el) { walk(child, depth: depth + 1) }
+            for child in children(el) { walk(child, depth: depth + 1, inWeb: inWeb) }
         }
         for root in roots { walk(root, depth: 0) }
 
-        // Cap at 40 but never drop a text field: keep fields, fill the rest in screen order.
-        var keep = Set(found.indices.filter { found[$0].role == "textfield" }.prefix(maxElements))
-        for i in found.indices where keep.count < maxElements { keep.insert(i) }
+        var keep = Set<Int>()
+        let onPage = found.indices.filter { found[$0].web }
+        if !onPage.isEmpty {
+            // A web page: what matters is the page's own links and buttons. The browser's
+            // toolbar (extensions, zoom, bookmarks) only crowds the list, so it gets a few slots.
+            for i in found.indices where found[i].role == "textfield" && keep.count < 4 { keep.insert(i) }
+            for i in onPage where keep.count < 30 { keep.insert(i) }
+            for i in found.indices where !found[i].web && keep.count < 34 { keep.insert(i) }
+        } else {
+            // Cap at 40 but never drop a text field: keep fields, fill the rest in screen order.
+            keep = Set(found.indices.filter { found[$0].role == "textfield" }.prefix(maxElements))
+            for i in found.indices where keep.count < maxElements { keep.insert(i) }
+        }
 
         var out: [[String: Any]] = []
         var map: [Int: AXUIElement] = [:]
